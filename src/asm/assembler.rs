@@ -339,14 +339,23 @@ impl AssemblerState
 		
 		// Output binary representation.
 		let (left, right) = rule.production.slice(&self.functions).unwrap();
-		
+		let instr_width = left - right + 1;
+
+		let insn_start_pc = match instr.ctx.get_address_at(report.clone(), self, &instr.span) {
+			Ok(value) => value.to_bigint().unwrap(),
+			Err(_) => return Err(())
+		};
+		args_eval_ctx.set_local("_insn_start", ExpressionValue::Integer(insn_start_pc.clone()));
+		args_eval_ctx.set_local("_insn_end", ExpressionValue::Integer(insn_start_pc.clone() + instr_width));
+		args_eval_ctx.set_local("_insn_width", ExpressionValue::Integer(instr_width.to_bigint().unwrap()));
+
 		let _guard = report.push_parent("failed to resolve instruction", &instr.span);
 		
 		let value = self.expr_eval(report.clone(), &instr.ctx, &rule.production, &mut args_eval_ctx)?;
 		
 		let block = &mut self.blocks[instr.ctx.block];
-		
-		for i in 0..(left - right + 1)
+
+		for i in 0..instr_width
 		{
 			let bit = value.get_bit(left - right - i);
 			block.write(instr.ctx.offset + i, bit);
