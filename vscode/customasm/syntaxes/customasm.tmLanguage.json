@@ -1,0 +1,134 @@
+{
+	"$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+	"name": "customasm",
+	"patterns": [
+		{ "include": "#comments" },
+		{ "include": "#directives" },
+		{ "include": "#rules" },
+		{ "include": "#keywords" },
+		{ "include": "#primitives" },
+		{ "include": "#expression" }
+	],
+	"repository": {
+		"comments": {
+			"patterns": [
+				{
+					"name": "comment.line.casm",
+					"match": ";.*"
+				}
+			]
+		},
+
+		"keywords": {
+			"patterns": [
+				{
+					"match": "^([a-zA-Z_][a-zA-Z0-9_]*)\\s*:",
+					"captures": {
+						"1": {
+							"name": "entity.name.tag"
+						}
+					}
+				}
+			]
+		},
+
+		"directives": {
+			"patterns": [
+				{
+					"begin": "(#tokendef)\\s*([a-zA-Z_][a-zA-Z0-9_]*)",
+					"end": "\\}",
+					"beginCaptures": {
+						"1": { 
+							"name": "meta.preprocessor.casm"
+						},
+						"2": {
+							"name": "entity.name.class"
+						}
+					},
+					"patterns": [
+						{
+							"match": "\\b([a-zA-Z_][a-zA-Z0-9_]*)\\s+(=)",
+							"captures": {
+								"1": { "name": "entity.name" },
+								"2": { "name": "keyword.operator" }
+							}
+						},
+						{
+							"include": "#expression"
+						}
+					]
+				},
+				{
+					"name": "meta.preprocessor.casm",
+					"match": "#[a-zA-Z_][a-zA-Z0-9_]*"
+				}
+			]
+		},
+
+		"expression": {
+			"patterns": [
+				{
+					"name": "keyword.operator.casm",
+					"match": "\\?|:|=|\\@|\\|\\||&&|==|!=|<|<=|>|>=|\\||\\^|&|<<|>>|\\+|-|\\*|\\/|%|!"
+				},
+				{
+					"name": "variable.name",
+					"match": "[a-zA-Z_][a-zA-Z0-9_]*"
+				}
+			]
+		},
+
+		"primitives": {
+			"patterns": [
+				{
+					"name": "constant.numeric.casm",
+					"match": "\\b[0-9][0-9a-zA-Z._']*\\b"
+				},
+				{
+					"name": "string.quoted.double.casm",
+					"begin": "\"",
+					"end": "\"",
+					"patterns": [
+						{
+							"name": "constant.character.escape.casm",
+							"match": "\\\\."
+						}
+					]
+				}
+			]
+		},
+
+		"rules": {
+			"patterns": [
+				{
+					"match": "(.*)(->)",
+					"captures": {
+						"1": {
+							"patterns": [
+								{
+									"match": "(\\{)\\s*([a-zA-Z_][a-zA-Z0-9_]*)(?:\\s*:\\s*([a-zA-Z_][a-zA-Z0-9_]*))?\\s*(\\})",
+									"captures": {
+										"2": {
+											"name": "variable.parameter"
+										},
+										"3": {
+											"name": "entity.name.class"
+										}
+									}
+								},
+								{
+									"name": "keyword.control",
+									"match": "[a-zA-Z_][a-zA-Z0-9_]*"
+								}
+							]
+						},
+						"2": {
+							"name": "keyword.operator"
+						}
+					}
+				}
+			]
+		}
+	},
+	"scopeName": "source.customasm"
+}

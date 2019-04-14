@@ -1,0 +1,25 @@
+{
+    "name": "customasm",
+    "displayName": "customasm",
+    "description": "Adds support for the customasm files https://github.com/hlorenzi/customasm/",
+    "version": "0.0.1",
+    "engines": {
+        "vscode": "^1.33.0"
+    },
+    "categories": [
+        "Programming Languages"
+    ],
+    "contributes": {
+        "languages": [{
+            "id": "customasm",
+            "aliases": ["customasm", "customasm"],
+            "extensions": [".asm"],
+            "configuration": "./language-configuration.json"
+        }],
+        "grammars": [{
+            "language": "customasm",
+            "scopeName": "source.customasm",
+            "path": "./syntaxes/customasm.tmLanguage.json"
+        }]
+    }
+}
