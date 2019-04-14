@@ -1,6 +1,6 @@
 use diagn::{Span, RcReport};
 use expr::{Expression, ExpressionValue, ExpressionEvalContext};
-use asm::{AssemblerParser, BinaryOutput, LabelManager, LabelContext};
+use asm::{AssemblerParser, BinaryOutput, LabelManager, FunctionManager, LabelContext};
 use asm::BankDef;
 use asm::BinaryBlock;
 use asm::cpudef::CpuDef;
@@ -12,6 +12,7 @@ pub struct AssemblerState
 {
 	pub cpudef: Option<CpuDef>,
 	pub labels: LabelManager,
+	pub functions: FunctionManager,
 	pub parsed_instrs: Vec<ParsedInstruction>,
 	pub parsed_exprs: Vec<ParsedExpression>,
 	
@@ -56,6 +57,7 @@ impl AssemblerState
 		{
 			cpudef: None,
 			labels: LabelManager::new(),
+			functions: FunctionManager::new(),
 			parsed_instrs: Vec::new(),
 			parsed_exprs: Vec::new(),
 			
@@ -336,7 +338,7 @@ impl AssemblerState
 			{ args_eval_ctx.set_local(rule.params[i].name.clone(), instr.args[i].clone().unwrap()); }
 		
 		// Output binary representation.
-		let (left, right) = rule.production.slice().unwrap();
+		let (left, right) = rule.production.slice(&self.functions).unwrap();
 		
 		let _guard = report.push_parent("failed to resolve instruction", &instr.span);
 		
@@ -383,9 +385,9 @@ impl AssemblerState
 	
 	pub fn expr_eval(&self, report: RcReport, ctx: &ExpressionContext, expr: &Expression, eval_ctx: &mut ExpressionEvalContext) -> Result<ExpressionValue, ()>
 	{
-		expr.eval(report.clone(), eval_ctx,
+		expr.eval(report.clone(), eval_ctx, &self.functions,
 			&|report, name, span| self.expr_eval_var(report, ctx, name, span),
-			&|report, fn_id, args, span| self.expr_eval_fn(report, fn_id, args, span))
+			&|report, fn_name, args, span| self.expr_eval_fn(report, fn_name, args, span))
 	}
 		
 		
@@ -394,8 +396,8 @@ impl AssemblerState
 		if name == "pc"
 			{ Ok(ExpressionValue::Integer(ctx.get_address_at(report, self, span)?.to_bigint().unwrap())) }
 			
-		else if name == "assert"
-			{ Ok(ExpressionValue::Function(0)) }
+		else if name == "assert" || self.functions.func_exists(name)
+			{ Ok(ExpressionValue::Function(name.to_string())) }
 		
 		else if let Some('.') = name.chars().next()
 		{
@@ -415,16 +417,16 @@ impl AssemblerState
 	}
 	
 	
-	fn expr_eval_fn(&self, report: RcReport, fn_id: usize, args: Vec<ExpressionValue>, span: &Span) -> Result<ExpressionValue, bool>
+	fn expr_eval_fn(&self, report: RcReport, fn_name: &str, args: Vec<ExpressionValue>, span: &Span) -> Result<ExpressionValue, bool>
 	{
-		match fn_id
+		match fn_name
 		{
-			0 =>
+			"assert" =>
 			{
 				if args.len() != 1
 					{ return Err({ report.error_span("wrong number of arguments", span); true }); }
 					
-				match args[0]
+				return match args[0]
 				{
 					ExpressionValue::Bool(value) =>
 					{
@@ -437,9 +439,32 @@ impl AssemblerState
 					
 					_ => Err({ report.error_span("wrong argument type", span); true })
 				}
-			}
-			
-			_ => unreachable!()
+			},
+
+			_ => {
+				match self.functions.get_func(fn_name) {
+					Some(func) => {
+                        if args.len() != func.parameters.len() {
+							return Err({
+								report.error_span(format!["wrong number of arguments, expecting {}", func.parameters.len()], span);
+								true
+							});
+						}
+
+						let mut args_eval_ctx = ExpressionEvalContext::new();
+						for i in 0..func.parameters.len() {
+							args_eval_ctx.set_local(func.parameters[i].clone(), args[i].clone());
+						}
+
+                        match self.expr_eval(report.clone(), &func.ctx, &func.expression, &mut args_eval_ctx) {
+							Ok(value) => Ok(value),
+							_ => Err(false)
+						}
+					},
+					None => return Err({ report.error_span("unknown function", span); true }),
+                    _ => unreachable!()
+				}
+            }
 		}
 	}
 }
@@ -451,15 +476,15 @@ impl ExpressionContext
 	{
 		if let Err(_) = state.check_cpudef_active(report.clone(), span)
 			{ return Err(true); }
-	
+
 		let bits = state.cpudef.as_ref().unwrap().bits;
 		let block = &state.blocks[self.block];
-		
+
 		if block.len() % bits != 0
 			{ return Err({ report.error_span("address is not aligned to a byte", span); true }); }
-			
+
 		let bankdef = state.find_bankdef(&block.bank_name).unwrap();
-		
+
 		let block_offset = self.offset / bits;
 		match block_offset.checked_add(state.bankdefs[bankdef].addr)
 		{

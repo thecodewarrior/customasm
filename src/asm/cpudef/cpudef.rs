@@ -1,8 +1,14 @@
-use syntax::{Token, TokenKind, Parser};
+use diagn::{Span, RcReport};
+use syntax::{Token, TokenKind, tokenize, Parser};
+use syntax::excerpt_as_string_contents;
 use expr::{Expression, ExpressionValue};
 use asm::cpudef::{Rule, RuleParameterType, RulePatternMatcher};
+use util::filename_navigate;
+use util::FileServer;
 use num_bigint::BigInt;
 use std::collections::HashMap;
+use AssemblerState;
+use asm::AssemblerParser;
 
 
 #[derive(Debug)]
@@ -19,7 +25,10 @@ pub struct CpuDef
 struct CpuDefParser<'t>
 {
 	parser: &'t mut Parser,
-	
+	fileserver: &'t FileServer,
+	cur_filename: String,
+	state: &'t mut AssemblerState,
+
 	bits: Option<usize>,
 	label_align: Option<usize>,
 	rules: Vec<Rule>,
@@ -37,26 +46,63 @@ pub struct CustomTokenDef
 
 impl CpuDef
 {
-	pub fn parse(parser: &mut Parser) -> Result<CpuDef, ()>
+	fn parse_file<'t, S>(report: RcReport, parser: &'t mut CpuDefParser, fileserver: &FileServer, filename: S, filename_span: Option<&Span>) -> Result<(), ()>
+		where S: Into<String>
+	{
+		let filename_owned = filename.into();
+		let chars = fileserver.get_chars(report.clone(), &filename_owned, filename_span)?;
+		let tokens = tokenize(report.clone(), filename_owned.as_ref(), &chars)?;
+
+		let mut new_parser = Parser::new(report.clone(), tokens);
+        let mut rules: Vec<Rule> = Vec::new();
+		let mut custom_token_defs: Vec<CustomTokenDef> = Vec::new();
+
+        // grab the rules/defs from the passed parser
+		std::mem::swap(&mut parser.rules, &mut rules);
+		std::mem::swap(&mut parser.custom_token_defs, &mut custom_token_defs);
+
+		let mut sub_parser = CpuDefParser {
+			parser: &mut new_parser,
+			fileserver: fileserver,
+			cur_filename: filename_owned,
+			state: parser.state,
+
+			bits: parser.bits,
+			label_align: parser.label_align,
+			rules: rules,
+			custom_token_defs: custom_token_defs
+		};
+
+		sub_parser.parse()?;
+
+		parser.bits = sub_parser.bits;
+		parser.label_align = sub_parser.label_align;
+		// swap the rules/defs (which were moved into sub_parser) back into the passed parser
+        std::mem::swap(&mut parser.rules, &mut sub_parser.rules);
+        std::mem::swap(&mut parser.custom_token_defs, &mut sub_parser.custom_token_defs);
+
+		Ok(())
+	}
+
+	pub fn parse(parser: &mut Parser, state: &mut AssemblerState, fileserver: &FileServer, cur_filename: &String) -> Result<CpuDef, ()>
 	{
 		let report = parser.report.clone();
 		
 		let mut cpudef_parser = CpuDefParser
 		{
 			parser: parser,
+			fileserver: fileserver,
+			cur_filename: cur_filename.clone(),
+			state: state,
+
 			bits: None,
 			label_align: None,
 			rules: Vec::new(),
 			custom_token_defs: Vec::new()
 		};
-		
-		cpudef_parser.parse_directives()?;	
-		
-		if cpudef_parser.bits.is_none()
-			{ cpudef_parser.bits = Some(8); }
-		
-		cpudef_parser.parse_rules()?;
-		
+
+		cpudef_parser.parse()?;
+
 		let pattern_matcher = RulePatternMatcher::new(report, &cpudef_parser.rules, &cpudef_parser.custom_token_defs)?;
 		
 		//println!("[pattern tree for cpudef]");
@@ -79,27 +125,46 @@ impl CpuDef
 
 impl<'t> CpuDefParser<'t>
 {
+	fn parse(&mut self) -> Result<(), ()>
+	{
+		self.parse_directives()?;
+
+		if self.bits.is_none()
+			{ self.bits = Some(8); }
+
+		self.parse_rules()?;
+
+		Ok(())
+	}
+
 	fn parse_directives(&mut self) -> Result<(), ()>
 	{
 		while self.parser.maybe_expect(TokenKind::Hash).is_some()
 		{
-			let tk_name = self.parser.expect_msg(TokenKind::Identifier, "expected directive name")?;
-			match tk_name.excerpt.as_ref().unwrap().as_ref()
-			{
-				"align"      => self.parse_directive_align(&tk_name)?,
-				"bits"       => self.parse_directive_bits(&tk_name)?,
-				"labelalign" => self.parse_directive_labelalign(&tk_name)?,
-				"tokendef"   => self.parse_directive_tokendef(&tk_name)?,
-				
-				_ => return Err(self.parser.report.error_span("unknown directive", &tk_name.span))
-			}
-			
+            self.parse_directive()?;
+
 			self.parser.expect_linebreak()?;
 		}
 	
 		Ok(())
 	}
-	
+
+	fn parse_directive(&mut self) -> Result<(), ()>
+	{
+		let tk_name = self.parser.expect_msg(TokenKind::Identifier, "expected directive name")?;
+		match tk_name.excerpt.as_ref().unwrap().as_ref()
+			{
+				"align"      => self.parse_directive_align(&tk_name)?,
+				"bits"       => self.parse_directive_bits(&tk_name)?,
+				"labelalign" => self.parse_directive_labelalign(&tk_name)?,
+				"tokendef"   => self.parse_directive_tokendef(&tk_name)?,
+				"include"    => self.parse_directive_include()?,
+				"fun"        => AssemblerParser::parse_directive_fun(self.state, self.parser)?,
+				_ => return Err(self.parser.report.error_span("unknown directive", &tk_name.span))
+			}
+
+        Ok(())
+	}
 	
 	fn parse_directive_align(&mut self, tk_name: &Token) -> Result<(), ()>
 	{
@@ -185,19 +250,31 @@ impl<'t> CpuDefParser<'t>
 		
 		Ok(())
 	}
-	
+
+	fn parse_directive_include(&mut self) -> Result<(), ()>
+	{
+		let tk_filename = self.parser.expect(TokenKind::String)?;
+		let filename = excerpt_as_string_contents(self.parser.report.clone(), tk_filename.excerpt.as_ref().unwrap().as_ref(), &tk_filename.span)?;
+
+		let new_filename = filename_navigate(self.parser.report.clone(), &self.cur_filename, &filename, &tk_filename.span)?;
+
+		CpuDef::parse_file(self.parser.report.clone(), self, self.fileserver, new_filename, Some(&tk_filename.span))
+	}
 
 	fn parse_rules(&mut self) -> Result<(), ()>
 	{
 		while !self.parser.is_over() && !self.parser.next_is(0, TokenKind::BraceClose)
 		{
-			self.parse_rule()?;
+            if self.parser.maybe_expect(TokenKind::Hash).is_some() {
+				self.parse_directive()?;
+			} else {
+				self.parse_rule()?;
+			}
 			self.parser.expect_linebreak()?;
 		}
 		
 		Ok(())
 	}
-	
 
 	fn parse_rule(&mut self) -> Result<(), ()>
 	{
@@ -323,7 +400,7 @@ impl<'t> CpuDefParser<'t>
 	{
 		let expr = Expression::parse(&mut self.parser)?;
 		
-		let width = match expr.width()
+		let width = match expr.width(&self.state.functions)
 		{
 			Some(w) => w,
 			None => return Err(self.parser.report.error_span("width of expression not known; try using a bit slice like `x[hi:lo]`", &expr.returned_value_span()))

@@ -1,18 +1,19 @@
 use diagn::Span;
 use super::Expression;
 use super::BinaryOp;
+use asm::FunctionManager;
 
 
 impl Expression
 {
-	pub fn width(&self) -> Option<usize>
+	pub fn width(&self, functions: &FunctionManager) -> Option<usize>
 	{
 		match self
 		{
 			&Expression::BinaryOp(_, _, BinaryOp::Concat, ref lhs, ref rhs) =>
 			{
-				let lhs_width = lhs.width();
-				let rhs_width = rhs.width();
+				let lhs_width = lhs.width(functions);
+				let rhs_width = rhs.width(functions);
 				
 				if lhs_width.is_none() || rhs_width.is_none()
 					{ return None; }
@@ -24,8 +25,8 @@ impl Expression
 			
 			&Expression::TernaryOp(_, _, ref true_branch, ref false_branch) =>
 			{
-				let true_width = true_branch.width();
-				let false_width = false_branch.width();
+				let true_width = true_branch.width(functions);
+				let false_width = false_branch.width(functions);
 				
 				if true_width.is_none() || false_width.is_none()
 					{ return None; }
@@ -41,7 +42,19 @@ impl Expression
 				match exprs.last()
 				{
 					None => None,
-					Some(expr) => expr.width()
+					Some(expr) => expr.width(functions)
+				}
+			}
+
+			&Expression::Call(ref span, ref target, ref arg_exprs) => {
+                match **target {
+					Expression::Variable(_, ref name) => {
+                        match functions.get_func(name) {
+							Some(func) => func.expression.width(functions),
+							None => None
+						}
+					}
+					_ => None
 				}
 			}
 			
@@ -50,24 +63,36 @@ impl Expression
 	}
 	
 	
-	pub fn slice(&self) -> Option<(usize, usize)>
+	pub fn slice(&self, functions: &FunctionManager) -> Option<(usize, usize)>
 	{
 		match self
 		{
-			&Expression::BinaryOp(_, _, BinaryOp::Concat, _, _) => self.width().map(|w| (w - 1, 0)),
+			&Expression::BinaryOp(_, _, BinaryOp::Concat, _, _) => self.width(functions).map(|w| (w - 1, 0)),
 			&Expression::BitSlice(_, _, left, right, _) => Some((left, right)),
 			
-			&Expression::TernaryOp(_, _, _, _) => self.width().map(|w| (w - 1, 0)),
+			&Expression::TernaryOp(_, _, _, _) => self.width(functions).map(|w| (w - 1, 0)),
 			
 			&Expression::Block(_, ref exprs) =>
 			{
 				match exprs.last()
 				{
 					None => None,
-					Some(expr) => expr.slice()
+					Some(expr) => expr.slice(functions)
 				}
 			}
-			
+
+			&Expression::Call(ref span, ref target, ref arg_exprs) => {
+				match **target {
+					Expression::Variable(_, ref name) => {
+						match functions.get_func(name) {
+							Some(func) => func.expression.slice(functions),
+							None => None
+						}
+					}
+					_ => None
+				}
+			}
+
 			_ => None
 		}
 	}

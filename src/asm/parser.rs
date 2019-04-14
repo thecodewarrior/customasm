@@ -107,6 +107,7 @@ impl<'a> AssemblerParser<'a>
 			"incbin"    => self.parse_directive_incbin(),
 			"incbinstr" => self.parse_directive_incstr(1),
 			"inchexstr" => self.parse_directive_incstr(4),
+			"fun"       => AssemblerParser::parse_directive_fun(self.state, &mut self.parser),
 			_ => Err(self.parser.report.error_span("unknown directive", &tk_name.span))
 		}
 	}
@@ -121,7 +122,7 @@ impl<'a> AssemblerParser<'a>
 		if self.state.cpudef.is_some()
 			{ return Err(self.parser.report.error_span("cpu already set", &tk_name.span)); }
 		
-		self.state.cpudef = Some(CpuDef::parse(&mut self.parser)?);
+		self.state.cpudef = Some(CpuDef::parse(&mut self.parser, self.state, self.fileserver, &self.cur_filename)?);
 		
 		self.parser.expect(TokenKind::BraceClose)?;
 		
@@ -286,7 +287,7 @@ impl<'a> AssemblerParser<'a>
 		
 		for c in chars
 		{
-			let mut digit = match c.to_digit(1 << bits_per_char)
+			let mut digit = match c.to_digit(1 << bits_per_char as u32)
 			{
 				Some(digit) => digit,
 				None => return Err(self.parser.report.error_span("invalid character in file contents", &tk_filename.span))
@@ -303,7 +304,7 @@ impl<'a> AssemblerParser<'a>
 		Ok(())
 	}
 	
-	
+
 	fn parse_directive_data(&mut self, elem_width: usize, tk_name: &Token) -> Result<(), ()>
 	{
 		if elem_width == 0
@@ -332,8 +333,42 @@ impl<'a> AssemblerParser<'a>
 		
 		Ok(())
 	}
-	
-	
+
+	pub fn parse_directive_fun(state: &mut AssemblerState, parser: &mut Parser) -> Result<(), ()>
+	{
+		let tk_name = parser.expect(TokenKind::Identifier)?;
+		let name = tk_name.excerpt.unwrap();
+		parser.expect(TokenKind::ParenOpen)?;
+
+		let mut args: Vec<String> = Vec::new();
+		loop
+			{
+				let ctx = state.get_cur_context();
+                let arg = match parser.maybe_expect(TokenKind::Identifier) {
+					Some(v) => v,
+					None => break
+				};
+
+				args.push(arg.excerpt.unwrap());
+
+				if parser.maybe_expect(TokenKind::Comma).is_none()
+				{ break; }
+			}
+
+		parser.expect(TokenKind::ParenClose)?;
+		parser.expect(TokenKind::Arrow)?;
+
+		let expr = Expression::parse(parser)?;
+
+		if state.functions.func_exists(&name) {
+			return Err(parser.report.error_span("duplicate function", &tk_name.span));
+		}
+
+		let ctx = state.get_cur_context();
+		state.functions.add_func(ctx, name, args, expr);
+		Ok(())
+	}
+
 	fn parse_label(&mut self) -> Result<(), ()>
 	{
 		let is_local = self.parser.maybe_expect(TokenKind::Dot).is_some();
@@ -439,7 +474,7 @@ impl<'a> AssemblerParser<'a>
 			let instr_width =
 			{
 				let rule = &self.state.cpudef.as_ref().unwrap().rules[rule_index];
-				rule.production.width().unwrap()
+				rule.production.width(&self.state.functions).unwrap()
 			};
 			
 			self.state.output_zero_bits(self.parser.report.clone(), instr_width, false, &instr_span)

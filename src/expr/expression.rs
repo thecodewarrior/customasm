@@ -23,7 +23,7 @@ pub enum ExpressionValue
 	Integer(BigInt),
 	Bool(bool),
 	String(String),
-	Function(usize)
+	Function(String)
 }
 
 

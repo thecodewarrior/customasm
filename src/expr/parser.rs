@@ -300,7 +300,7 @@ impl<'a> ExpressionParser<'a>
 	fn parse_call(&mut self) -> Result<Expression, ()>
 	{
 		let leaf = self.parse_leaf()?;
-		
+
 		if self.parser.next_is_linebreak()
 			{ return Ok(leaf); }
 			

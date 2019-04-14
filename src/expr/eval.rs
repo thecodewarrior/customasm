@@ -10,6 +10,7 @@ use num_traits::One;
 use num_traits::ToPrimitive;
 use std::mem::swap;
 use std::collections::HashMap;
+use asm::FunctionManager;
 
 
 pub struct ExpressionEvalContext
@@ -49,10 +50,10 @@ impl ExpressionEvalContext
 
 impl Expression
 {
-	pub fn eval<FVar, FFn>(&self, report: RcReport, ctx: &mut ExpressionEvalContext, eval_var: &FVar, eval_fn: &FFn) -> Result<ExpressionValue, ()>
+	pub fn eval<FVar, FFn>(&self, report: RcReport, ctx: &mut ExpressionEvalContext, functions: &FunctionManager, eval_var: &FVar, eval_fn: &FFn) -> Result<ExpressionValue, ()>
 		where
 		FVar: Fn(RcReport, &str, &Span) -> Result<ExpressionValue, bool>,
-		FFn: Fn(RcReport, usize, Vec<ExpressionValue>, &Span) -> Result<ExpressionValue, bool>
+		FFn: Fn(RcReport, &str, Vec<ExpressionValue>, &Span) -> Result<ExpressionValue, bool>
 	{
 		match self
 		{
@@ -76,7 +77,7 @@ impl Expression
 			
 			&Expression::UnaryOp(ref span, _, op, ref inner_expr) =>
 			{
-				match inner_expr.eval(report.clone(), ctx, eval_var, eval_fn)?
+				match inner_expr.eval(report.clone(), ctx, functions, eval_var, eval_fn)?
 				{
 					ExpressionValue::Integer(x) => match op
 					{
@@ -104,7 +105,7 @@ impl Expression
 					{
 						&Expression::Variable(_, ref name) =>
 						{
-							let value = rhs_expr.eval(report.clone(), ctx, eval_var, eval_fn)?;
+							let value = rhs_expr.eval(report.clone(), ctx, functions, eval_var, eval_fn)?;
 							ctx.set_local(name.clone(), value);
 							Ok(ExpressionValue::Void)
 						}
@@ -115,7 +116,7 @@ impl Expression
 				
 				else if op == BinaryOp::LazyOr || op == BinaryOp::LazyAnd
 				{
-					let lhs = lhs_expr.eval(report.clone(), ctx, eval_var, eval_fn)?;
+					let lhs = lhs_expr.eval(report.clone(), ctx, functions, eval_var, eval_fn)?;
 					
 					match (op, &lhs)
 					{
@@ -126,7 +127,7 @@ impl Expression
 						_ => return Err(report.error_span("invalid argument type to operator", &lhs_expr.span()))
 					}
 					
-					let rhs = rhs_expr.eval(report.clone(), ctx, eval_var, eval_fn)?;
+					let rhs = rhs_expr.eval(report.clone(), ctx, functions, eval_var, eval_fn)?;
 					
 					match (op, &rhs)
 					{
@@ -140,7 +141,7 @@ impl Expression
 				
 				else
 				{
-					match (lhs_expr.eval(report.clone(), ctx, eval_var, eval_fn)?, rhs_expr.eval(report.clone(), ctx, eval_var, eval_fn)?)
+					match (lhs_expr.eval(report.clone(), ctx, functions, eval_var, eval_fn)?, rhs_expr.eval(report.clone(), ctx, functions, eval_var, eval_fn)?)
 					{
 						(ExpressionValue::Integer(lhs), ExpressionValue::Integer(rhs)) =>
 						{
@@ -186,7 +187,7 @@ impl Expression
 								
 								BinaryOp::Concat =>
 								{
-									match (lhs_expr.width(), rhs_expr.width())
+									match (lhs_expr.width(functions), rhs_expr.width(functions))
 									{
 										(Some(lhs_width), Some(rhs_width)) => Ok(ExpressionValue::Integer(bigint_concat(lhs, lhs_width, rhs, rhs_width))),
 										(None, _) => Err(report.error_span("argument to concatenation with no known width", &lhs_expr.span())),
@@ -218,17 +219,17 @@ impl Expression
 			
 			&Expression::TernaryOp(_, ref cond, ref true_branch, ref false_branch) =>
 			{
-				match cond.eval(report.clone(), ctx, eval_var, eval_fn)?
+				match cond.eval(report.clone(), ctx, functions, eval_var, eval_fn)?
 				{
-					ExpressionValue::Bool(true)  => true_branch.eval(report.clone(), ctx, eval_var, eval_fn),
-					ExpressionValue::Bool(false) => false_branch.eval(report.clone(), ctx, eval_var, eval_fn),
+					ExpressionValue::Bool(true)  => true_branch.eval(report.clone(), ctx, functions, eval_var, eval_fn),
+					ExpressionValue::Bool(false) => false_branch.eval(report.clone(), ctx, functions, eval_var, eval_fn),
 					_ => Err(report.error_span("invalid condition type", &cond.span()))
 				}
 			}
 			
 			&Expression::BitSlice(ref span, _, left, right, ref inner) =>
 			{
-				match inner.eval(report.clone(), ctx, eval_var, eval_fn)?
+				match inner.eval(report.clone(), ctx, functions, eval_var, eval_fn)?
 				{
 					ExpressionValue::Integer(x) => Ok(ExpressionValue::Integer(bigint_slice(x, left, right))),
 					_ => Err(report.error_span("invalid argument type to slice", &span))
@@ -240,22 +241,22 @@ impl Expression
 				let mut result = ExpressionValue::Void;
 				
 				for expr in exprs
-					{ result = expr.eval(report.clone(), ctx, eval_var, eval_fn)?; }
+					{ result = expr.eval(report.clone(), ctx, functions, eval_var, eval_fn)?; }
 					
 				Ok(result)
 			}
 			
 			&Expression::Call(ref span, ref target, ref arg_exprs) =>
 			{
-				match target.eval(report.clone(), ctx, eval_var, eval_fn)?
+				match target.eval(report.clone(), ctx, functions, eval_var, eval_fn)?
 				{
-					ExpressionValue::Function(id) =>
+					ExpressionValue::Function(ref name) =>
 					{
 						let mut args = Vec::new();
 						for expr in arg_exprs
-							{ args.push(expr.eval(report.clone(), ctx, eval_var, eval_fn)?); }
+							{ args.push(expr.eval(report.clone(), ctx, functions, eval_var, eval_fn)?); }
 							
-						match eval_fn(report, id, args, &span)
+						match eval_fn(report, &name, args, &span)
 						{
 							Ok(value) => Ok(value),
 							Err(_handled) => Err(())
