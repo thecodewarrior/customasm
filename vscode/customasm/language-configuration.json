@@ -28,7 +28,6 @@
     },
     "indentationRules": {
         "increaseIndentPattern": "\\{\\s*$",
-        "decreaseIndentPattern": "\\}\\s*$",
-        "indentNextLinePattern": "->\\s*$|\\@\\s*$"
+        "decreaseIndentPattern": "\\}\\s*$"
     }
 }
