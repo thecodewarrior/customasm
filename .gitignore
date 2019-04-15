@@ -2,3 +2,5 @@
 /pkg/
 /.pkgtemp/
 /Cargo.lock
+/.idea/
+/.vscode/
