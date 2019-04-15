@@ -127,7 +127,7 @@ impl<'a> ExpressionParser<'a>
 			let false_branch =
 			{
 				if self.parser.maybe_expect(TokenKind::Colon).is_some()
-					{ self.parse_assignment()? }
+					{ self.parse_ternary_conditional()? }
 				else
 					{ Expression::Block(true_branch.span(), Vec::new()) }
 			};

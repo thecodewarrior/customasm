@@ -360,7 +360,7 @@ impl<'a> AssemblerParser<'a>
 
 		let expr = Expression::parse(parser)?;
 
-		if state.functions.func_exists(&name) {
+		if state.functions.func_exists(&name, args.len()) {
 			return Err(parser.report.error_span("duplicate function", &tk_name.span));
 		}
 

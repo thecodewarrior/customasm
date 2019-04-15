@@ -33,6 +33,7 @@ struct Message
 #[derive(Copy, Clone)]
 enum MessageKind
 {
+	Debug,
 	Error,
 	Warning
 }
@@ -70,7 +71,22 @@ impl Report
 		
 		self.messages.push(msg);
 	}
-	
+
+	pub fn debug<S>(&mut self, descr: S)
+		where S: Into<String>
+	{
+		let msg = Message{ descr: descr.into(), kind: MessageKind::Debug, span: None, inner: None };
+		self.message(msg);
+	}
+
+
+	pub fn debug_span<S>(&mut self, descr: S, span: &Span)
+		where S: Into<String>
+	{
+		let msg = Message{ descr: descr.into(), kind: MessageKind::Debug, span: Some(span.clone()), inner: None };
+		self.message(msg);
+	}
+
 	
 	pub fn error<S>(&mut self, descr: S)
 	where S: Into<String>
@@ -350,8 +366,21 @@ impl RcReport
 	{
 		RcReport { report: Rc::new(RefCell::new(Report::new())) }
 	}
-	
-	
+
+	pub fn debug<S>(&self, descr: S)
+		where S: Into<String>
+	{
+		self.report.borrow_mut().debug(descr);
+	}
+
+
+	pub fn debug_span<S>(&self, descr: S, span: &Span)
+		where S: Into<String>
+	{
+		self.report.borrow_mut().debug_span(descr, span);
+	}
+
+
 	pub fn error<S>(&self, descr: S)
 	where S: Into<String>
 	{
@@ -437,6 +466,7 @@ impl MessageKind
 	{
 		match self
 		{
+			&MessageKind::Debug => "debug",
 			&MessageKind::Error => "error",
 			&MessageKind::Warning => "warning"
 		}
@@ -447,6 +477,7 @@ impl MessageKind
 	{
 		match self
 		{
+			&MessageKind::Debug => C_DEFAULT,
 			&MessageKind::Error => C_ERROR,
 			&MessageKind::Warning => C_WARNING
 		}

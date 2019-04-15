@@ -248,10 +248,9 @@ impl Expression
 			
 			&Expression::Call(ref span, ref target, ref arg_exprs) =>
 			{
-				match target.eval(report.clone(), ctx, functions, eval_var, eval_fn)?
+				match **target
 				{
-					ExpressionValue::Function(ref name) =>
-					{
+					Expression::Variable(ref span, ref name) => {
 						let mut args = Vec::new();
 						for expr in arg_exprs
 							{ args.push(expr.eval(report.clone(), ctx, functions, eval_var, eval_fn)?); }

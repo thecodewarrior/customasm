@@ -91,7 +91,17 @@ impl AssemblerState
 		self.resolve_instrs(report.clone())?;
 		self.resolve_exprs(report.clone())?;
 		self.check_bank_overlap(report.clone());
-		
+
+//        for func in self.functions.all_functions() {
+//			report.debug_span(format!("{}", func.expression.tree(&self.functions)), &func.expression.span())
+//		}
+//
+//        if let Some(cpudef) = &self.cpudef {
+//			for rule in &cpudef.rules {
+//				report.debug_span(format!("{}", rule.production.tree(&self.functions)), &rule.production.span())
+//			}
+//		}
+
 		match report.has_errors()
 		{
 			true => Err(()),
@@ -339,7 +349,9 @@ impl AssemblerState
 		
 		// Output binary representation.
 		let (left, right) = rule.production.slice(&self.functions).unwrap();
-		let instr_width = left - right + 1;
+		let word_size = &self.cpudef.as_ref().unwrap().bits;
+		let instr_width_bits = left - right + 1;
+		let instr_width = instr_width_bits / word_size;
 
 		let insn_start_pc = match instr.ctx.get_address_at(report.clone(), self, &instr.span) {
 			Ok(value) => value.to_bigint().unwrap(),
@@ -355,7 +367,7 @@ impl AssemblerState
 		
 		let block = &mut self.blocks[instr.ctx.block];
 
-		for i in 0..instr_width
+		for i in 0..instr_width_bits
 		{
 			let bit = value.get_bit(left - right - i);
 			block.write(instr.ctx.offset + i, bit);
@@ -404,10 +416,10 @@ impl AssemblerState
 	{
 		if name == "pc"
 			{ Ok(ExpressionValue::Integer(ctx.get_address_at(report, self, span)?.to_bigint().unwrap())) }
-			
-		else if name == "assert" || self.functions.func_exists(name)
-			{ Ok(ExpressionValue::Function(name.to_string())) }
-		
+		else if name == "void" {
+			Ok(ExpressionValue::Void)
+		}
+
 		else if let Some('.') = name.chars().next()
 		{
 			if self.labels.local_exists(ctx.label_ctx, name)
@@ -451,17 +463,10 @@ impl AssemblerState
 			},
 
 			_ => {
-				match self.functions.get_func(fn_name) {
+				match self.functions.get_func(fn_name, args.len()) {
 					Some(func) => {
-                        if args.len() != func.parameters.len() {
-							return Err({
-								report.error_span(format!["wrong number of arguments, expecting {}", func.parameters.len()], span);
-								true
-							});
-						}
-
 						let mut args_eval_ctx = ExpressionEvalContext::new();
-						for i in 0..func.parameters.len() {
+						for i in 0..args.len() {
 							args_eval_ctx.set_local(func.parameters[i].clone(), args[i].clone());
 						}
 
@@ -471,7 +476,6 @@ impl AssemblerState
 						}
 					},
 					None => return Err({ report.error_span("unknown function", span); true }),
-                    _ => unreachable!()
 				}
             }
 		}

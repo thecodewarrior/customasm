@@ -403,7 +403,11 @@ impl<'t> CpuDefParser<'t>
 		let width = match expr.width(&self.state.functions)
 		{
 			Some(w) => w,
-			None => return Err(self.parser.report.error_span("width of expression not known; try using a bit slice like `x[hi:lo]`", &expr.returned_value_span()))
+			None => {
+				self.parser.report.debug_span(format!("\n{}", expr.tree(&self.state.functions)), &expr.span());
+				self.parser.report.error_span("width of expression not known; try using a bit slice like `x[hi:lo]`", &expr.returned_value_span());
+				return Err(())
+			}
 		};
 		
 		if width % self.bits.unwrap() != 0

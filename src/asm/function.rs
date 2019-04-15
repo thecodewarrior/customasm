@@ -9,10 +9,17 @@ use asm::ExpressionContext;
 
 pub struct FunctionManager
 {
-	functions: HashMap<String, Function>
+	functions: HashMap<FunctionSignature, Function>
+}
+
+#[derive(PartialEq, Eq, Hash, Clone)]
+pub struct FunctionSignature {
+	pub name: String,
+	pub parameters: usize
 }
 
 pub struct Function {
+    pub signature: FunctionSignature,
 	pub expression: Expression,
 	pub parameters: Vec<String>,
 	pub ctx: ExpressionContext
@@ -33,17 +40,25 @@ impl FunctionManager
 	pub fn add_func<S>(&mut self, ctx: ExpressionContext, name: S, parameters: Vec<String>, expr: Expression)
 	where S: Into<String>
 	{
-        self.functions.insert(name.into(), Function { expression: expr, parameters: parameters, ctx: ctx });
-	}
-	
-	
-	pub fn get_func(&self, name: &str) -> Option<&Function>
-	{
-		self.functions.get(name)
+		let signature = FunctionSignature {
+			name: name.into(),
+			parameters: parameters.len()
+		};
+
+        self.functions.insert(signature.clone(), Function { signature: signature, expression: expr, parameters: parameters, ctx: ctx });
 	}
 
-	pub fn func_exists(&self, name: &str) -> bool
+	pub fn all_functions(&self) -> Vec<&Function> {
+		self.functions.values().into_iter().collect()
+	}
+
+	pub fn get_func(&self, name: &str, parameters: usize) -> Option<&Function>
 	{
-		self.get_func(name).is_some()
+		self.functions.get(&FunctionSignature { name: name.into(), parameters: parameters })
+	}
+
+	pub fn func_exists(&self, name: &str, parameters: usize) -> bool
+	{
+		self.get_func(name, parameters).is_some()
 	}
 }

@@ -1,5 +1,6 @@
 use diagn::Span;
 use num_bigint::BigInt;
+use std::fmt;
 
 
 #[derive(Debug)]
@@ -78,5 +79,62 @@ impl ExpressionValue
 	pub fn make_literal(&self) -> Expression
 	{
 		Expression::Literal(Span::new_dummy(), self.clone())
+	}
+}
+
+impl fmt::Display for ExpressionValue {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		write!(f, "{}", match self {
+			ExpressionValue::Void => format!("Void"),
+			ExpressionValue::Integer(ref value) => format!("Integer({})", value),
+			ExpressionValue::Bool(value) => format!("Bool({})", value),
+			ExpressionValue::String(value) => format!("String({:?})", value),
+			ExpressionValue::Function(value) => format!("Function({:?})", value)
+		})
+	}
+}
+
+impl fmt::Display for UnaryOp {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		write!(f, "{}", match self {
+			UnaryOp::Neg => "-",
+			UnaryOp::Not => "!"
+		})
+	}
+}
+
+impl fmt::Display for BinaryOp {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		write!(f, "{}", match self {
+			BinaryOp::Assign => "=",
+			BinaryOp::Add => "+",
+			BinaryOp::Sub => "-",
+			BinaryOp::Mul => "*",
+			BinaryOp::Div => "/",
+			BinaryOp::Mod => "%",
+
+			BinaryOp::Shl => "<<",
+			BinaryOp::Shr => ">>",
+
+			BinaryOp::And => "&",
+			BinaryOp::Or => "|",
+			BinaryOp::Xor => "^",
+
+
+			BinaryOp::Eq => "==",
+			BinaryOp::Ne => "!=",
+
+			BinaryOp::Lt => "<",
+			BinaryOp::Le => "<=",
+
+			BinaryOp::Gt => ">",
+			BinaryOp::Ge => ">=",
+
+
+			BinaryOp::LazyAnd => "&&",
+			BinaryOp::LazyOr => "||",
+
+			BinaryOp::Concat => "@"
+		})
 	}
 }
