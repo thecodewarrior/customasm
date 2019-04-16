@@ -356,7 +356,7 @@ impl<'a> AssemblerParser<'a>
 			}
 
 		parser.expect(TokenKind::ParenClose)?;
-		parser.expect(TokenKind::Arrow)?;
+		parser.expect(TokenKind::FatArrow)?;
 
 		let expr = Expression::parse(parser)?;
 

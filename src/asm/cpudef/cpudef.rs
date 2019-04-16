@@ -40,7 +40,7 @@ struct CpuDefParser<'t>
 pub struct CustomTokenDef
 {
 	pub name: String,
-	pub excerpt_to_value_map: HashMap<String, ExpressionValue>
+	pub tokens: HashMap<Vec<(TokenKind, Option<String>)>, ExpressionValue>
 }
 
 
@@ -217,31 +217,14 @@ impl<'t> CpuDefParser<'t>
 		let mut tokendef = CustomTokenDef
 		{
 			name: defname,
-			excerpt_to_value_map: HashMap::new()
+			tokens: HashMap::new()
 		};
 		
 		self.parser.expect(TokenKind::BraceOpen)?;
 		
 		while !self.parser.is_over() && !self.parser.next_is(0, TokenKind::BraceClose)
 		{
-			let tk_token = self.parser.expect(TokenKind::Identifier)?;
-			let token_excerpt = tk_token.excerpt.unwrap().clone();
-			
-			if tokendef.excerpt_to_value_map.contains_key(&token_excerpt)
-				{ return Err(self.parser.report.error_span("duplicate tokendef entry", &tk_token.span)); }
-			
-			self.parser.expect(TokenKind::Equal)?;
-			let value = ExpressionValue::Integer(BigInt::from(self.parser.expect_usize()?.1));
-			
-			tokendef.excerpt_to_value_map.insert(token_excerpt, value);
-			
-			if self.parser.maybe_expect_linebreak().is_some()
-				{ continue; }
-				
-			if self.parser.next_is(0, TokenKind::BraceClose)
-				{ continue; }
-				
-			self.parser.expect(TokenKind::Comma)?;
+            self.parse_tokendef_token(&mut tokendef)?;
 		}
 		
 		self.parser.expect(TokenKind::BraceClose)?;
@@ -249,6 +232,57 @@ impl<'t> CpuDefParser<'t>
 		self.custom_token_defs.push(tokendef);
 		
 		Ok(())
+	}
+
+    fn parse_tokendef_token(&mut self, tokendef: &mut CustomTokenDef) -> Result<(), ()>
+    {
+        let mut allowed_after_parameter = false;
+		let mut is_first_token = true;
+
+		let mut tokens: Vec<(TokenKind, Option<String>)> = Vec::new();
+		let first: Span = self.parser.next().span.clone();
+		let mut last: Span = self.parser.next().span.clone();
+
+        while !self.parser.is_over() && !self.parser.next_is(0, TokenKind::Colon) && !self.parser.next_is(0, TokenKind::BraceClose) {
+			let tk = self.parser.advance();
+            last = tk.span.clone();
+
+			if !tk.kind.is_allowed_pattern_token() {
+                return Err(self.parser.report.error_span("invalid pattern token", &tk.span));
+            }
+            if is_first_token {
+				allowed_after_parameter = tk.kind.is_allowed_after_pattern_parameter();
+				is_first_token = false;
+            }
+
+            tokens.push((tk.kind, tk.excerpt));
+		}
+
+        let full_span = first.join(&last);
+
+        if tokens.len() == 0 {
+			return Err(self.parser.report.error_span("No tokens", &full_span));
+		}
+
+		if tokendef.tokens.contains_key(&tokens) {
+			return Err(self.parser.report.error_span("duplicate tokendef entry", &full_span));
+		}
+
+        self.parser.expect(TokenKind::Colon)?;
+
+		let value = ExpressionValue::Integer(BigInt::from(self.parser.expect_usize()?.1));
+
+		tokendef.tokens.insert(tokens, value);
+
+		if self.parser.maybe_expect_linebreak().is_some()
+		{ return Ok(()); }
+
+		if self.parser.next_is(0, TokenKind::BraceClose)
+		{ return Ok(()); }
+
+		self.parser.expect(TokenKind::Comma)?;
+
+        Ok(())
 	}
 
 	fn parse_directive_include(&mut self) -> Result<(), ()>
@@ -292,7 +326,7 @@ impl<'t> CpuDefParser<'t>
 		
 		rule.pattern_span = pattern_span_start.join(&self.parser.prev().span);
 		
-		self.parser.expect(TokenKind::Arrow)?;
+		self.parser.expect(TokenKind::FatArrow)?;
 		self.parse_rule_production(&mut rule)?;
 		
 		self.rules.push(rule);
@@ -305,7 +339,7 @@ impl<'t> CpuDefParser<'t>
 	{
 		let mut prev_was_expr_parameter = false;
 		
-		while !self.parser.next_is(0, TokenKind::Arrow) && !self.parser.next_is(0, TokenKind::ColonColon)
+		while !self.parser.next_is(0, TokenKind::FatArrow)
 		{
 			let tk = self.parser.advance();
 			

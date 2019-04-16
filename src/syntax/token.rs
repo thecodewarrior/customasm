@@ -33,6 +33,8 @@ pub enum TokenKind
 	Colon,
 	ColonColon,
 	Arrow,
+	BackArrow,
+	FatArrow,
 	Hash,
 	Equal,
 	Plus,
@@ -41,6 +43,7 @@ pub enum TokenKind
 	Slash,
 	Percent,
 	Question,
+	SingleQuote,
 	Exclamation,
 	Ampersand,
 	VerticalBar,
@@ -81,36 +84,43 @@ impl TokenKind
 	
 	pub fn is_allowed_pattern_token(self) -> bool
 	{
-		self == TokenKind::Identifier ||
-		self == TokenKind::Number ||
-		self == TokenKind::ParenOpen ||
-		self == TokenKind::ParenClose ||
-		self == TokenKind::BracketOpen ||
-		self == TokenKind::BracketClose ||
-		self == TokenKind::Dot ||
-		self == TokenKind::Comma ||
-		self == TokenKind::Hash ||
-		self == TokenKind::Plus ||
-		self == TokenKind::Minus ||
-		self == TokenKind::Asterisk ||
-		self == TokenKind::Slash ||
-		self == TokenKind::Percent ||
-		self == TokenKind::Exclamation ||
-		self == TokenKind::Ampersand ||
-		self == TokenKind::VerticalBar ||
-		self == TokenKind::Circumflex ||
-		self == TokenKind::Tilde ||
-		self == TokenKind::At ||
-		self == TokenKind::LessThan ||
-		self == TokenKind::GreaterThan
+		false || // make indents consistent
+			self == TokenKind::Identifier ||
+			self == TokenKind::Number ||
+			self == TokenKind::ParenOpen ||
+			self == TokenKind::ParenClose ||
+			self == TokenKind::BracketOpen ||
+			self == TokenKind::BracketClose ||
+			self == TokenKind::Dot ||
+			self == TokenKind::Comma ||
+			self == TokenKind::ColonColon ||
+			self == TokenKind::Arrow ||
+			self == TokenKind::BackArrow ||
+			self == TokenKind::Plus ||
+			self == TokenKind::Minus ||
+			self == TokenKind::Asterisk ||
+			self == TokenKind::Slash ||
+			self == TokenKind::Percent ||
+			self == TokenKind::SingleQuote ||
+			self == TokenKind::Exclamation ||
+			self == TokenKind::Ampersand ||
+			self == TokenKind::VerticalBar ||
+			self == TokenKind::Circumflex ||
+			self == TokenKind::Tilde ||
+			self == TokenKind::At ||
+			self == TokenKind::LessThan ||
+			self == TokenKind::GreaterThan
 	}
 	
 	
 	pub fn is_allowed_after_pattern_parameter(self) -> bool
 	{
-		self == TokenKind::ParenClose ||
-		self == TokenKind::BracketClose ||
-		self == TokenKind::Comma
+		false ||
+			self == TokenKind::ParenClose ||
+			self == TokenKind::BracketClose ||
+			self == TokenKind::Comma ||
+			self == TokenKind::Arrow ||
+			self == TokenKind::BackArrow
 	}
 	
 	
@@ -137,6 +147,8 @@ impl TokenKind
 			TokenKind::Colon => "`:`",
 			TokenKind::ColonColon => "`::`",
 			TokenKind::Arrow => "`->`",
+			TokenKind::BackArrow => "`<-`",
+			TokenKind::FatArrow => "`=>`",
 			TokenKind::Hash => "`#`",
 			TokenKind::Equal => "`=`",
 			TokenKind::Plus => "`+`",
@@ -145,6 +157,7 @@ impl TokenKind
 			TokenKind::Slash => "`/`",
 			TokenKind::Percent => "`%`",
 			TokenKind::Question => "`?`",
+			TokenKind::SingleQuote => "`'`",
 			TokenKind::Exclamation => "`!`",
 			TokenKind::Ampersand => "`&`",
 			TokenKind::VerticalBar => "`|`",
@@ -299,9 +312,13 @@ fn check_for_string(src: &[char]) -> Option<(TokenKind, usize)>
 		{ return None; }
 		
 	length += 1;
-	
-	while length < src.len() && src[length] != '\"' // "
-		{ length += 1; }
+
+	let mut is_escaped = false;
+	while length < src.len() && (is_escaped || src[length] != '\"') // "
+		{
+			is_escaped = !is_escaped && src[length] == '\\';
+			length += 1;
+		}
 		
 	if length >= src.len()
 		{ return None; }
@@ -317,7 +334,7 @@ fn check_for_string(src: &[char]) -> Option<(TokenKind, usize)>
 
 fn check_for_fixed(src: &[char]) -> Option<(TokenKind, usize)>
 {
-	static POSSIBLE_TOKENS: [(&str, TokenKind); 37] =
+	static POSSIBLE_TOKENS: [(&str, TokenKind); 40] =
 	[
 		("\n",  TokenKind::LineBreak),
 		("(",   TokenKind::ParenOpen),
@@ -331,6 +348,8 @@ fn check_for_fixed(src: &[char]) -> Option<(TokenKind, usize)>
 		("::",  TokenKind::ColonColon),
 		(":",   TokenKind::Colon),
 		("->",  TokenKind::Arrow),
+		("<-",  TokenKind::BackArrow),
+		("=>",  TokenKind::FatArrow),
 		("#",   TokenKind::Hash),
 		("+",   TokenKind::Plus),
 		("-",   TokenKind::Minus),
@@ -347,6 +366,7 @@ fn check_for_fixed(src: &[char]) -> Option<(TokenKind, usize)>
 		("==",  TokenKind::EqualEqual),
 		("=",   TokenKind::Equal),
 		("?",   TokenKind::Question),
+		("'",   TokenKind::SingleQuote),
 		("!=",  TokenKind::ExclamationEqual),
 		("!",   TokenKind::Exclamation),
 		("<=",  TokenKind::LessThanEqual),

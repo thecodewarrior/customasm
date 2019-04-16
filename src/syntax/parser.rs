@@ -12,6 +12,7 @@ pub struct Parser
 }
 
 
+#[derive(Clone)]
 pub struct ParserState
 {
 	index: usize,

@@ -2,7 +2,10 @@
 	"$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
 	"name": "customasm",
 	"patterns": [
-		{ "include": "#comments" },
+		{
+			"name": "comment.line.casm",
+			"match": ";.*"
+		},
 		{ "include": "#directives" },
 		{ "include": "#rules" },
 		{ "include": "#keywords" },
@@ -10,15 +13,6 @@
 		{ "include": "#expression" }
 	],
 	"repository": {
-		"comments": {
-			"patterns": [
-				{
-					"name": "comment.line.casm",
-					"match": ";.*"
-				}
-			]
-		},
-
 		"keywords": {
 			"patterns": [
 				{
@@ -35,7 +29,7 @@
 		"directives": {
 			"patterns": [
 				{
-					"match": "(#fun)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*\\(([^\\)]*)\\)\\s*(->)",
+					"match": "(#fun)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*\\(([^\\)]*)\\)\\s*(=>)",
 					"captures": {
 						"1": { 
 							"name": "meta.preprocessor.casm"
@@ -68,6 +62,17 @@
 					}
 				},
 				{
+					"match": "(#permutationdef)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+					"captures": {
+						"1": { 
+							"name": "meta.preprocessor.casm"
+						},
+						"2": {
+							"name": "entity.name.class"
+						}
+					}
+				},
+				{
 					"name": "meta.preprocessor.casm",
 					"match": "#[a-zA-Z_][a-zA-Z0-9_]*"
 				}
@@ -78,7 +83,7 @@
 			"patterns": [
 				{
 					"name": "keyword.operator.casm",
-					"match": "\\?|:|=|\\@|\\|\\||&&|==|!=|<|<=|>|>=|\\||\\^|&|<<|>>|\\+|-|\\*|\\/|%|!"
+					"match": "\\?|:|=|\\@|\\|\\||&&|==|!=|<|<=|>|>=|\\||\\^|&|<<|>>|\\+|-|\\*|\\/|%|!|=>|<-|::|'"
 				},
 				{
 					"name": "entity.name.function",
@@ -114,7 +119,7 @@
 		"rules": {
 			"patterns": [
 				{
-					"match": "(.*)(->)",
+					"match": "([^;]*)(=>)",
 					"captures": {
 						"1": {
 							"patterns": [
