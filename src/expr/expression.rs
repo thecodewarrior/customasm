@@ -4,14 +4,49 @@ use std::fmt;
 
 #[derive(Debug)]
 pub enum Expression {
-    Literal(Span, ExpressionValue),
-    Variable(Span, String),
-    UnaryOp(Span, Span, UnaryOp, Box<Expression>),
-    BinaryOp(Span, Span, BinaryOp, Box<Expression>, Box<Expression>),
-    TernaryOp(Span, Box<Expression>, Box<Expression>, Box<Expression>),
-    BitSlice(Span, Span, usize, usize, Box<Expression>),
-    Block(Span, Vec<Expression>),
-    Call(Span, Box<Expression>, Vec<Expression>),
+    Literal {
+        span: Span,
+        value: ExpressionValue,
+    },
+    Variable {
+        span: Span,
+        name: String,
+    },
+    UnaryOp {
+        span: Span,
+        op_span: Span,
+        op: UnaryOp,
+        expr: Box<Expression>,
+    },
+    BinaryOp {
+        span: Span,
+        op_span: Span,
+        op: BinaryOp,
+        left: Box<Expression>,
+        right: Box<Expression>,
+    },
+    TernaryOp {
+        span: Span,
+        test: Box<Expression>,
+        if_true: Box<Expression>,
+        if_false: Box<Expression>,
+    },
+    BitSlice {
+        span: Span,
+        op_span: Span,
+        left: usize,
+        right: usize,
+        expr: Box<Expression>,
+    },
+    Block {
+        span: Span,
+        expressions: Vec<Expression>,
+    },
+    Call {
+        span: Span,
+        callee: Box<Expression>,
+        arguments: Vec<Expression>,
+    },
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -60,21 +95,24 @@ pub enum BinaryOp {
 impl Expression {
     pub fn span(&self) -> Span {
         match self {
-            &Expression::Literal(ref span, ..) => span.clone(),
-            &Expression::Variable(ref span, ..) => span.clone(),
-            &Expression::UnaryOp(ref span, ..) => span.clone(),
-            &Expression::BinaryOp(ref span, ..) => span.clone(),
-            &Expression::TernaryOp(ref span, ..) => span.clone(),
-            &Expression::BitSlice(ref span, ..) => span.clone(),
-            &Expression::Block(ref span, ..) => span.clone(),
-            &Expression::Call(ref span, ..) => span.clone(),
+            &Expression::Literal { ref span, .. } => span.clone(),
+            &Expression::Variable { ref span, .. } => span.clone(),
+            &Expression::UnaryOp { ref span, .. } => span.clone(),
+            &Expression::BinaryOp { ref span, .. } => span.clone(),
+            &Expression::TernaryOp { ref span, .. } => span.clone(),
+            &Expression::BitSlice { ref span, .. } => span.clone(),
+            &Expression::Block { ref span, .. } => span.clone(),
+            &Expression::Call { ref span, .. } => span.clone(),
         }
     }
 }
 
 impl ExpressionValue {
     pub fn make_literal(&self) -> Expression {
-        Expression::Literal(Span::new_dummy(), self.clone())
+        Expression::Literal {
+            span: Span::new_dummy(),
+            value: self.clone(),
+        }
     }
 }
 

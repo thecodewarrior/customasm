@@ -18,10 +18,15 @@ struct MatchStep {
 }
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
-struct MatchStepExact(TokenKind, Option<String>);
+struct MatchStepExact {
+    kind: TokenKind,
+    excerpt: Option<String>,
+}
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
-struct MatchStepCompound(Vec<MatchStepExact>);
+struct MatchStepCompound {
+    tokens: Vec<MatchStepExact>,
+}
 
 #[derive(Debug, Eq, PartialEq, Hash)]
 struct MatchStepParameter;
@@ -72,8 +77,10 @@ impl RulePatternMatcher {
 
         match next_parts[0] {
             RulePatternPart::Exact(kind, ref excerpt) => {
-                let step_kind =
-                    MatchStepExact(kind, excerpt.as_ref().map(|s| s.to_ascii_lowercase()));
+                let step_kind = MatchStepExact {
+                    kind,
+                    excerpt: excerpt.as_ref().map(|s| s.to_ascii_lowercase()),
+                };
 
                 if let Some(ref mut next_step) = step.children_exact.get_mut(&step_kind) {
                     return RulePatternMatcher::build_step(
@@ -105,12 +112,15 @@ impl RulePatternMatcher {
                     let custom_token_def = &custom_token_defs[tokendef_index].tokens;
 
                     for (tokens, value) in custom_token_def.iter() {
-                        let step_kind = MatchStepCompound(
-                            tokens
+                        let step_kind = MatchStepCompound {
+                            tokens: tokens
                                 .iter()
-                                .map(|it| MatchStepExact(it.0, it.1.clone()))
+                                .map(|it| MatchStepExact {
+                                    kind: it.0,
+                                    excerpt: it.1.clone(),
+                                })
                                 .collect(),
-                        );
+                        };
 
                         if let Some(&mut (ref existing_value, ref mut next_step)) =
                             step.children_compound.get_mut(&step_kind)
@@ -208,7 +218,10 @@ impl RulePatternMatcher {
 
             let tk = parser.advance();
 
-            let step_exact = MatchStepExact(tk.kind, tk.excerpt.map(|s| s.to_ascii_lowercase()));
+            let step_exact = MatchStepExact {
+                kind: tk.kind,
+                excerpt: tk.excerpt.map(|s| s.to_ascii_lowercase()),
+            };
 
             if let Some(ref next_step) = step.children_exact.get(&step_exact) {
                 if let Some(result) = self.parse_match_step(parser, next_step, exprs) {
@@ -223,13 +236,15 @@ impl RulePatternMatcher {
                 .iter()
                 .map(|(k, _)| k.clone())
                 .collect();
-            sorted.sort_unstable_by_key(|it| -((it.0).len() as isize));
+            sorted.sort_unstable_by_key(|it| -(it.tokens.len() as isize));
             let matched_key = sorted.iter().find(|key| {
                 parser.restore(parser_state.clone());
-                key.0.iter().all(|key_tk| {
+                key.tokens.iter().all(|key_tk| {
                     let tk = parser.advance();
-                    let step_exact =
-                        MatchStepExact(tk.kind, tk.excerpt.map(|s| s.to_ascii_lowercase()));
+                    let step_exact = MatchStepExact {
+                        kind: tk.kind,
+                        excerpt: tk.excerpt.map(|s| s.to_ascii_lowercase()),
+                    };
                     &step_exact == key_tk
                 })
             });
@@ -306,7 +321,8 @@ impl RulePatternMatcher {
 
             print!(
                 "{}",
-                key.0.printable_excerpt(key.1.as_ref().map(|s| s as &str))
+                key.kind
+                    .printable_excerpt(key.excerpt.as_ref().map(|s| s as &str))
             );
 
             println!();
@@ -320,9 +336,12 @@ impl RulePatternMatcher {
             }
 
             let token_strings: Vec<String> = key
-                .0
+                .tokens
                 .iter()
-                .map(|it| it.0.printable_excerpt(it.1.as_ref().map(|s| s as &str)))
+                .map(|it| {
+                    it.kind
+                        .printable_excerpt(it.excerpt.as_ref().map(|s| s as &str))
+                })
                 .collect();
 
             print!("{}", token_strings.join("-"));

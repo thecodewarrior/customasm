@@ -7,9 +7,15 @@ use util::TreeNode;
 impl Expression {
     pub fn width(&self, functions: &FunctionManager) -> Option<usize> {
         match self {
-            &Expression::BinaryOp(_, _, BinaryOp::Concat, ref lhs, ref rhs) => {
-                let lhs_width = lhs.width(functions);
-                let rhs_width = rhs.width(functions);
+            &Expression::BinaryOp {
+                span: _,
+                op_span: _,
+                op: BinaryOp::Concat,
+                ref left,
+                ref right,
+            } => {
+                let lhs_width = left.width(functions);
+                let rhs_width = right.width(functions);
 
                 if lhs_width.is_none() || rhs_width.is_none() {
                     return None;
@@ -18,11 +24,22 @@ impl Expression {
                 Some(lhs_width.unwrap() + rhs_width.unwrap())
             }
 
-            &Expression::BitSlice(_, _, left, right, _) => Some(left - right),
+            &Expression::BitSlice {
+                span: _,
+                op_span: _,
+                left,
+                right,
+                expr: _,
+            } => Some(left - right),
 
-            &Expression::TernaryOp(_, _, ref true_branch, ref false_branch) => {
-                let true_width = true_branch.width(functions);
-                let false_width = false_branch.width(functions);
+            &Expression::TernaryOp {
+                span: _,
+                test: _,
+                ref if_true,
+                ref if_false,
+            } => {
+                let true_width = if_true.width(functions);
+                let false_width = if_false.width(functions);
 
                 if true_width.is_none() || false_width.is_none() {
                     return None;
@@ -35,16 +52,23 @@ impl Expression {
                 Some(true_width.unwrap())
             }
 
-            &Expression::Block(_, ref exprs) => match exprs.last() {
+            &Expression::Block {
+                span: _,
+                ref expressions,
+            } => match expressions.last() {
                 None => None,
                 Some(expr) => expr.width(functions),
             },
 
-            &Expression::Variable(_, ref name) if name == "void" => Some(0),
+            &Expression::Variable { span: _, ref name } if name == "void" => Some(0),
 
-            &Expression::Call(ref span, ref target, ref arg_exprs) => match **target {
-                Expression::Variable(_, ref name) => {
-                    match functions.get_func(name, arg_exprs.len()) {
+            &Expression::Call {
+                ref span,
+                ref callee,
+                ref arguments,
+            } => match **callee {
+                Expression::Variable { span: _, ref name } => {
+                    match functions.get_func(name, arguments.len()) {
                         Some(func) => func.expression.width(functions),
                         None => None,
                     }
@@ -58,7 +82,10 @@ impl Expression {
 
     pub fn returned_value_span(&self) -> Span {
         match self {
-            &Expression::Block(ref span, ref exprs) => match exprs.last() {
+            &Expression::Block {
+                ref span,
+                ref expressions,
+            } => match expressions.last() {
                 None => span.clone(),
                 Some(expr) => expr.returned_value_span(),
             },
@@ -72,20 +99,31 @@ impl Expression {
             .width(functions)
             .map_or("?".to_string(), |w| format!("{}", w));
         match self {
-            &Expression::Literal(_, ref value) => {
+            &Expression::Literal { span: _, ref value } => {
                 TreeNode::new(format!("`{}` -- {}", value, width_str))
             }
-            &Expression::Variable(_, ref name) => {
+            &Expression::Variable { span: _, ref name } => {
                 TreeNode::new(format!("var: {} -- {}", name, width_str))
             }
-            &Expression::UnaryOp(_, _, ref op, ref expr) => {
+            &Expression::UnaryOp {
+                span: _,
+                op_span: _,
+                ref op,
+                ref expr,
+            } => {
                 let mut node = TreeNode::new(format!("{}___ -- {}", op, width_str));
 
                 node.add_node("expr=", expr.tree(functions));
 
                 node
             }
-            &Expression::BinaryOp(_, _, ref op, ref left, ref right) => {
+            &Expression::BinaryOp {
+                span: _,
+                op_span: _,
+                ref op,
+                ref left,
+                ref right,
+            } => {
                 let mut node = TreeNode::new(format!("___ {} ___ -- {}", op, width_str));
 
                 node.add_node("left=", left.tree(functions));
@@ -93,7 +131,12 @@ impl Expression {
 
                 node
             }
-            &Expression::TernaryOp(_, ref test, ref if_true, ref if_false) => {
+            &Expression::TernaryOp {
+                span: _,
+                ref test,
+                ref if_true,
+                ref if_false,
+            } => {
                 let mut node = TreeNode::new(format!("Ternary -- {}", width_str));
 
                 node.add_node("test=", test.tree(functions));
@@ -102,14 +145,23 @@ impl Expression {
 
                 node
             }
-            &Expression::BitSlice(_, _, first, last, ref expr) => {
-                let mut node = TreeNode::new(format!("[{}:{}] -- {}", first, last, width_str));
+            &Expression::BitSlice {
+                span: _,
+                op_span: _,
+                left,
+                right,
+                ref expr,
+            } => {
+                let mut node = TreeNode::new(format!("[{}:{}] -- {}", left, right, width_str));
 
                 node.add_node("expr=", expr.tree(functions));
 
                 node
             }
-            &Expression::Block(_, ref expressions) => {
+            &Expression::Block {
+                span: _,
+                ref expressions,
+            } => {
                 let mut node = TreeNode::new(format!("Block -- {}", width_str));
 
                 for expr in expressions {
@@ -118,22 +170,26 @@ impl Expression {
 
                 node
             }
-            &Expression::Call(_, ref target, ref arg_exprs) => {
+            &Expression::Call {
+                span: _,
+                ref callee,
+                ref arguments,
+            } => {
                 let mut node = TreeNode::new(format!("Call {}", width_str));
 
-                node.add_node("target=", target.tree(functions));
+                node.add_node("callee=", callee.tree(functions));
 
-                let mut arg_node = TreeNode::new(format!("Args: {}", arg_exprs.len()));
+                let mut arg_node = TreeNode::new(format!("Args: {}", arguments.len()));
 
-                for expr in arg_exprs {
+                for expr in arguments {
                     arg_node.add_node("", expr.tree(functions))
                 }
 
                 node.add_node("", arg_node);
 
-                match **target {
-                    Expression::Variable(_, ref name) => {
-                        match functions.get_func(name, arg_exprs.len()) {
+                match **callee {
+                    Expression::Variable { span: _, ref name } => {
+                        match functions.get_func(name, arguments.len()) {
                             Some(func) => node.add_node("func=", func.expression.tree(functions)),
                             None => node.add_leaf("func=<missing>".to_string()),
                         }

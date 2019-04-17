@@ -34,7 +34,10 @@ impl Rule {
             pattern_parts: Vec::new(),
             pattern_span: Span::new_dummy(),
             params: Vec::new(),
-            production: Expression::Literal(Span::new_dummy(), ExpressionValue::Bool(false)),
+            production: Expression::Literal {
+                span: Span::new_dummy(),
+                value: ExpressionValue::Bool(false),
+            },
         }
     }
 

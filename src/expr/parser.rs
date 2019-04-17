@@ -37,12 +37,12 @@ impl<'a> ExpressionParser<'a> {
             let inner = self.parse_unary_ops(ops, parse_inner)?;
             let span = tk.span.join(&inner.span());
 
-            return Ok(Expression::UnaryOp(
-                span,
-                tk.span.clone(),
-                op.1,
-                Box::new(inner),
-            ));
+            return Ok(Expression::UnaryOp {
+                span: span,
+                op_span: tk.span.clone(),
+                op: op.1,
+                expr: Box::new(inner),
+            });
         }
 
         parse_inner(self)
@@ -72,13 +72,13 @@ impl<'a> ExpressionParser<'a> {
                 let rhs = parse_inner(self)?;
                 let span = lhs.span().join(&rhs.span());
 
-                lhs = Expression::BinaryOp(
-                    span,
-                    op_match.0.span.clone(),
-                    op_match.1,
-                    Box::new(lhs),
-                    Box::new(rhs),
-                );
+                lhs = Expression::BinaryOp {
+                    span: span,
+                    op_span: op_match.0.span.clone(),
+                    op: op_match.1,
+                    left: Box::new(lhs),
+                    right: Box::new(rhs),
+                };
             } else {
                 break;
             }
@@ -110,13 +110,13 @@ impl<'a> ExpressionParser<'a> {
             let rhs = self.parse_expr()?;
             let span = lhs.span().join(&rhs.span());
 
-            lhs = Expression::BinaryOp(
-                span,
-                op_match.0.span.clone(),
-                op_match.1,
-                Box::new(lhs),
-                Box::new(rhs),
-            );
+            lhs = Expression::BinaryOp {
+                span: span,
+                op_span: op_match.0.span.clone(),
+                op: op_match.1,
+                left: Box::new(lhs),
+                right: Box::new(rhs),
+            };
         }
 
         Ok(lhs)
@@ -132,16 +132,19 @@ impl<'a> ExpressionParser<'a> {
                 if self.parser.maybe_expect(TokenKind::Colon).is_some() {
                     self.parse_ternary_conditional()?
                 } else {
-                    Expression::Block(true_branch.span(), Vec::new())
+                    Expression::Block {
+                        span: true_branch.span(),
+                        expressions: Vec::new(),
+                    }
                 }
             };
 
-            Ok(Expression::TernaryOp(
-                cond.span().join(&false_branch.span()),
-                Box::new(cond),
-                Box::new(true_branch),
-                Box::new(false_branch),
-            ))
+            Ok(Expression::TernaryOp {
+                span: cond.span().join(&false_branch.span()),
+                test: Box::new(cond),
+                if_true: Box::new(true_branch),
+                if_false: Box::new(false_branch),
+            })
         } else {
             Ok(cond)
         }
@@ -267,13 +270,13 @@ impl<'a> ExpressionParser<'a> {
                 .error_span("invalid bit slice range", &slice_span));
         }
 
-        Ok(Expression::BitSlice(
-            span,
-            slice_span,
-            leftmost,
-            rightmost,
-            Box::new(inner),
-        ))
+        Ok(Expression::BitSlice {
+            span: span,
+            op_span: slice_span,
+            left: leftmost,
+            right: rightmost,
+            expr: Box::new(inner),
+        })
     }
 
     fn parse_unary(&mut self) -> Result<Expression, ()> {
@@ -310,11 +313,11 @@ impl<'a> ExpressionParser<'a> {
 
         let tk_close = self.parser.expect(TokenKind::ParenClose)?;
 
-        Ok(Expression::Call(
-            leaf.span().join(&tk_close.span),
-            Box::new(leaf),
-            args,
-        ))
+        Ok(Expression::Call {
+            span: leaf.span().join(&tk_close.span),
+            callee: Box::new(leaf),
+            arguments: args,
+        })
     }
 
     fn parse_leaf(&mut self) -> Result<Expression, ()> {
@@ -354,7 +357,10 @@ impl<'a> ExpressionParser<'a> {
 
         let tk_close = self.parser.expect(TokenKind::BraceClose)?;
 
-        Ok(Expression::Block(tk_open.span.join(&tk_close.span), exprs))
+        Ok(Expression::Block {
+            span: tk_open.span.join(&tk_close.span),
+            expressions: exprs,
+        })
     }
 
     fn parse_parenthesized(&mut self) -> Result<Expression, ()> {
@@ -372,9 +378,15 @@ impl<'a> ExpressionParser<'a> {
         name.push_str(&tk_name.excerpt.clone().unwrap());
 
         if let Some(tk_dot) = tk_dot {
-            Ok(Expression::Variable(tk_dot.span.join(&tk_name.span), name))
+            Ok(Expression::Variable {
+                span: tk_dot.span.join(&tk_name.span),
+                name,
+            })
         } else {
-            Ok(Expression::Variable(tk_name.span.clone(), name))
+            Ok(Expression::Variable {
+                span: tk_name.span.clone(),
+                name,
+            })
         }
     }
 
@@ -393,27 +405,30 @@ impl<'a> ExpressionParser<'a> {
         };
 
         let span = tk_number.span;
-        let expr = Expression::Literal(span.clone(), ExpressionValue::Integer(bigint));
+        let expr = Expression::Literal {
+            span: span.clone(),
+            value: ExpressionValue::Integer(bigint),
+        };
 
         match width {
-            Some(width) => Ok(Expression::BitSlice(
-                span.clone(),
-                span,
-                width,
-                0,
-                Box::new(expr),
-            )),
+            Some(width) => Ok(Expression::BitSlice {
+                span: span.clone(),
+                op_span: span,
+                left: width,
+                right: 0,
+                expr: Box::new(expr),
+            }),
 
             None => match radix_bits {
                 None => Ok(expr),
 
-                Some(radix_bits) => Ok(Expression::BitSlice(
-                    span.clone(),
-                    span,
-                    radix_bits * digit_num,
-                    0,
-                    Box::new(expr),
-                )),
+                Some(radix_bits) => Ok(Expression::BitSlice {
+                    span: span.clone(),
+                    op_span: span,
+                    left: radix_bits * digit_num,
+                    right: 0,
+                    expr: Box::new(expr),
+                }),
             },
         }
     }
