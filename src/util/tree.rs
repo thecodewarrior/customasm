@@ -3,14 +3,14 @@ use std::fmt;
 #[derive(Clone)]
 pub struct TreeNode {
     pub name: String,
-    pub children: Vec<TreeNode>
+    pub children: Vec<TreeNode>,
 }
 
 impl TreeNode {
     pub fn new(name: String) -> TreeNode {
         TreeNode {
             name: name,
-            children: Vec::new()
+            children: Vec::new(),
         }
     }
 
@@ -29,7 +29,7 @@ impl TreeNode {
         let initial_prefix: String;
         let prefix: String;
         if depth >= 1 {
-            initial_prefix = fill.repeat(depth-1) + " ╚═ ";
+            initial_prefix = fill.repeat(depth - 1) + " ╚═ ";
             prefix = fill.repeat(depth) + " ";
         } else {
             initial_prefix = String::new();
@@ -37,7 +37,15 @@ impl TreeNode {
         };
         let mut i = 0;
         for line in self.name.split('\n').collect::<Vec<&str>>() {
-            writeln!(f, "{}", if i == 0 { initial_prefix.clone() } else { prefix.clone() } + line)?;
+            writeln!(
+                f,
+                "{}",
+                if i == 0 {
+                    initial_prefix.clone()
+                } else {
+                    prefix.clone()
+                } + line
+            )?;
             i += 1;
         }
         for child in &self.children {
