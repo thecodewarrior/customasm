@@ -348,9 +348,8 @@ impl AssemblerState
 			{ args_eval_ctx.set_local(rule.params[i].name.clone(), instr.args[i].clone().unwrap()); }
 		
 		// Output binary representation.
-		let (left, right) = rule.production.slice(&self.functions).unwrap();
 		let word_size = &self.cpudef.as_ref().unwrap().bits;
-		let instr_width_bits = left - right;
+		let instr_width_bits = rule.production.width(&self.functions).unwrap();
 		let instr_width = instr_width_bits / word_size;
 
 		let insn_start_pc = match instr.ctx.get_address_at(report.clone(), self, &instr.span) {
@@ -369,7 +368,7 @@ impl AssemblerState
 
 		for i in 0..instr_width_bits
 		{
-			let bit = value.get_bit(left - right - i - 1);
+			let bit = value.get_bit(instr_width_bits-1 - i);
 			block.write(instr.ctx.offset + i, bit);
 		}
 		

@@ -64,45 +64,7 @@ impl Expression
 			_ => None
 		}
 	}
-	
-	
-	pub fn slice(&self, functions: &FunctionManager) -> Option<(usize, usize)>
-	{
-		match self
-		{
-			&Expression::BinaryOp(_, _, BinaryOp::Concat, _, _) => self.width(functions).map(|w| (w, 0)),
-			&Expression::BitSlice(_, _, left, right, _) => Some((left, right)),
-			
-			&Expression::TernaryOp(_, _, _, _) => self.width(functions).map(|w| (w, 0)),
-			
-			&Expression::Block(_, ref exprs) =>
-			{
-				match exprs.last()
-				{
-					None => None,
-					Some(expr) => expr.slice(functions)
-				}
-			}
 
-			&Expression::Variable(_, ref name) if name == "void" => Some((0, 0)),
-
-			&Expression::Call(ref span, ref target, ref arg_exprs) => {
-				match **target {
-					Expression::Variable(_, ref name) => {
-						match functions.get_func(name, arg_exprs.len()) {
-							Some(func) => func.expression.slice(functions),
-							None => None
-						}
-					}
-					_ => None
-				}
-			}
-
-			_ => None
-		}
-	}
-	
-	
 	pub fn returned_value_span(&self) -> Span
 	{
 		match self
