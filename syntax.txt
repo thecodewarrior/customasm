@@ -101,6 +101,7 @@ tokens (<token> <pattern_allowed ? # > ➤  <Name>)
     '            # ➤  SingleQuote
     !            # ➤  Exclamation
     &            # ➤  Ampersand
+    $            # ➤  Dollar
     |            # ➤  VerticalBar
     ^            # ➤  Circumflex
     ~            # ➤  Tilde

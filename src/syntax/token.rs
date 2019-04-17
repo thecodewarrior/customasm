@@ -42,6 +42,7 @@ pub enum TokenKind {
     SingleQuote,
     Exclamation,
     Ampersand,
+    Dollar,
     VerticalBar,
     Circumflex,
     Tilde,
@@ -89,6 +90,7 @@ impl TokenKind {
 			self == TokenKind::SingleQuote ||
 			self == TokenKind::Exclamation ||
 			self == TokenKind::Ampersand ||
+            self == TokenKind::Dollar ||
 			self == TokenKind::VerticalBar ||
 			self == TokenKind::Circumflex ||
 			self == TokenKind::Tilde ||
@@ -140,6 +142,7 @@ impl TokenKind {
             TokenKind::SingleQuote => "`'`",
             TokenKind::Exclamation => "`!`",
             TokenKind::Ampersand => "`&`",
+            TokenKind::Dollar => "`$`",
             TokenKind::VerticalBar => "`|`",
             TokenKind::Circumflex => "`^`",
             TokenKind::Tilde => "`~`",
@@ -317,7 +320,7 @@ fn check_for_string(src: &[char]) -> Option<(TokenKind, usize)> {
 }
 
 fn check_for_fixed(src: &[char]) -> Option<(TokenKind, usize)> {
-    static POSSIBLE_TOKENS: [(&str, TokenKind); 40] = [
+    static POSSIBLE_TOKENS: [(&str, TokenKind); 41] = [
         ("\n", TokenKind::LineBreak),
         ("(", TokenKind::ParenOpen),
         (")", TokenKind::ParenClose),
@@ -343,6 +346,7 @@ fn check_for_fixed(src: &[char]) -> Option<(TokenKind, usize)> {
         ("@", TokenKind::At),
         ("&&", TokenKind::AmpersandAmpersand),
         ("&", TokenKind::Ampersand),
+        ("$", TokenKind::Dollar),
         ("||", TokenKind::VerticalBarVerticalBar),
         ("|", TokenKind::VerticalBar),
         ("==", TokenKind::EqualEqual),
