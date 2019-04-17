@@ -8,6 +8,7 @@ pub struct Rule {
     pub pattern_span: Span,
     pub params: Vec<RuleParameter>,
     pub production: Expression,
+    pub width: Option<usize>,
 }
 
 #[derive(Debug, Eq, PartialEq, Hash)]
@@ -38,6 +39,7 @@ impl Rule {
                 span: Span::new_dummy(),
                 value: ExpressionValue::Bool(false),
             },
+            width: None,
         }
     }
 

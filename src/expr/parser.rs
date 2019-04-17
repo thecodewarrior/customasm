@@ -407,7 +407,7 @@ impl<'a> ExpressionParser<'a> {
         let span = tk_number.span;
         let expr = Expression::Literal {
             span: span.clone(),
-            value: ExpressionValue::Integer(bigint),
+            value: ExpressionValue::Integer(bigint, None),
         };
 
         match width {

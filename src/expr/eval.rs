@@ -74,9 +74,9 @@ impl Expression {
                 op,
                 ref expr,
             } => match expr.eval(report.clone(), ctx, functions, eval_var, eval_fn)? {
-                ExpressionValue::Integer(x) => match op {
-                    UnaryOp::Neg => Ok(ExpressionValue::Integer(-x)),
-                    UnaryOp::Not => Ok(ExpressionValue::Integer(bigint_not(x))),
+                ExpressionValue::Integer(x, _) => match op {
+                    UnaryOp::Neg => Ok(ExpressionValue::Integer(-x, None)),
+                    UnaryOp::Not => Ok(ExpressionValue::Integer(bigint_not(x), None)),
                 },
 
                 ExpressionValue::Bool(b) => match op {
@@ -138,14 +138,14 @@ impl Expression {
                         left.eval(report.clone(), ctx, functions, eval_var, eval_fn)?,
                         right.eval(report.clone(), ctx, functions, eval_var, eval_fn)?,
                     ) {
-                        (ExpressionValue::Integer(lhs), ExpressionValue::Integer(rhs)) => {
+                        (ExpressionValue::Integer(lhs, lhs_width), ExpressionValue::Integer(rhs, rhs_width)) => {
                             match op {
-                                BinaryOp::Add => Ok(ExpressionValue::Integer(lhs + rhs)),
-                                BinaryOp::Sub => Ok(ExpressionValue::Integer(lhs - rhs)),
-                                BinaryOp::Mul => Ok(ExpressionValue::Integer(lhs * rhs)),
+                                BinaryOp::Add => Ok(ExpressionValue::Integer(lhs + rhs, None)),
+                                BinaryOp::Sub => Ok(ExpressionValue::Integer(lhs - rhs, None)),
+                                BinaryOp::Mul => Ok(ExpressionValue::Integer(lhs * rhs, None)),
 
                                 BinaryOp::Div => match lhs.checked_div(&rhs) {
-                                    Some(x) => Ok(ExpressionValue::Integer(x)),
+                                    Some(x) => Ok(ExpressionValue::Integer(x, None)),
                                     None => Err(report.error_span(
                                         "division by zero",
                                         &op_span.join(&right.span()),
@@ -153,7 +153,7 @@ impl Expression {
                                 },
 
                                 BinaryOp::Mod => match bigint_checked_rem(lhs, rhs) {
-                                    Some(x) => Ok(ExpressionValue::Integer(x)),
+                                    Some(x) => Ok(ExpressionValue::Integer(x, None)),
                                     None => Err(report.error_span(
                                         "modulo by zero",
                                         &op_span.join(&right.span()),
@@ -161,7 +161,7 @@ impl Expression {
                                 },
 
                                 BinaryOp::Shl => match bigint_shl(lhs, rhs) {
-                                    Some(x) => Ok(ExpressionValue::Integer(x)),
+                                    Some(x) => Ok(ExpressionValue::Integer(x, None)),
                                     None => Err(report.error_span(
                                         "invalid shift value",
                                         &op_span.join(&right.span()),
@@ -169,16 +169,16 @@ impl Expression {
                                 },
 
                                 BinaryOp::Shr => match bigint_shr(lhs, rhs) {
-                                    Some(x) => Ok(ExpressionValue::Integer(x)),
+                                    Some(x) => Ok(ExpressionValue::Integer(x, None)),
                                     None => Err(report.error_span(
                                         "invalid shift value",
                                         &op_span.join(&right.span()),
                                     )),
                                 },
 
-                                BinaryOp::And => Ok(ExpressionValue::Integer(bigint_and(lhs, rhs))),
-                                BinaryOp::Or => Ok(ExpressionValue::Integer(bigint_or(lhs, rhs))),
-                                BinaryOp::Xor => Ok(ExpressionValue::Integer(bigint_xor(lhs, rhs))),
+                                BinaryOp::And => Ok(ExpressionValue::Integer(bigint_and(lhs, rhs), None)),
+                                BinaryOp::Or => Ok(ExpressionValue::Integer(bigint_or(lhs, rhs), None)),
+                                BinaryOp::Xor => Ok(ExpressionValue::Integer(bigint_xor(lhs, rhs), None)),
                                 BinaryOp::Eq => Ok(ExpressionValue::Bool(lhs == rhs)),
                                 BinaryOp::Ne => Ok(ExpressionValue::Bool(lhs != rhs)),
                                 BinaryOp::Lt => Ok(ExpressionValue::Bool(lhs < rhs)),
@@ -187,11 +187,14 @@ impl Expression {
                                 BinaryOp::Ge => Ok(ExpressionValue::Bool(lhs >= rhs)),
 
                                 BinaryOp::Concat => {
-                                    match (left.width(functions), right.width(functions)) {
+                                    match (lhs_width, rhs_width) {
                                         (Some(lhs_width), Some(rhs_width)) => {
-                                            Ok(ExpressionValue::Integer(bigint_concat(
-                                                lhs, lhs_width, rhs, rhs_width,
-                                            )))
+                                            Ok(ExpressionValue::Integer(
+                                                bigint_concat(
+                                                    lhs, lhs_width, rhs, rhs_width,
+                                                ),
+                                                Some(lhs_width + rhs_width)
+                                            ))
                                         }
                                         (None, _) => Err(report.error_span(
                                             "argument to concatenation with no known width",
@@ -249,8 +252,8 @@ impl Expression {
                 right,
                 ref expr,
             } => match expr.eval(report.clone(), ctx, functions, eval_var, eval_fn)? {
-                ExpressionValue::Integer(x) => {
-                    Ok(ExpressionValue::Integer(bigint_slice(x, left, right)))
+                ExpressionValue::Integer(x, _) => {
+                    Ok(ExpressionValue::Integer(bigint_slice(x, left, right), Some(left - right)))
                 }
                 _ => Err(report.error_span("invalid argument type to slice", &span)),
             },
@@ -294,7 +297,7 @@ impl Expression {
 impl ExpressionValue {
     pub fn bits(&self) -> usize {
         match self {
-            &ExpressionValue::Integer(ref bigint) => bigint_bits(&bigint),
+            &ExpressionValue::Integer(ref bigint, _) => bigint_bits(&bigint),
 
             _ => panic!("not an integer"),
         }
@@ -302,7 +305,7 @@ impl ExpressionValue {
 
     pub fn get_bit(&self, index: usize) -> bool {
         match self {
-            &ExpressionValue::Integer(ref bigint) => {
+            &ExpressionValue::Integer(ref bigint, _) => {
                 let bytes = bigint.to_signed_bytes_le();
 
                 let byte_index = index / 8;

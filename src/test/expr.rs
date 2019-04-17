@@ -36,16 +36,16 @@ where
 
 #[test]
 fn test_literals() {
-    test("0", Pass(ExpressionValue::Integer(BigInt::from(0))));
-    test("1", Pass(ExpressionValue::Integer(BigInt::from(1))));
-    test("10", Pass(ExpressionValue::Integer(BigInt::from(10))));
+    test("0", Pass(ExpressionValue::Integer(BigInt::from(0), None)));
+    test("1", Pass(ExpressionValue::Integer(BigInt::from(1), None)));
+    test("10", Pass(ExpressionValue::Integer(BigInt::from(10), None)));
 
-    test("0b10", Pass(ExpressionValue::Integer(BigInt::from(2))));
-    test("0o10", Pass(ExpressionValue::Integer(BigInt::from(8))));
-    test("0x10", Pass(ExpressionValue::Integer(BigInt::from(16))));
+    test("0b10", Pass(ExpressionValue::Integer(BigInt::from(2), None)));
+    test("0o10", Pass(ExpressionValue::Integer(BigInt::from(8), None)));
+    test("0x10", Pass(ExpressionValue::Integer(BigInt::from(16), None)));
 
-    test("0b1_0", Pass(ExpressionValue::Integer(BigInt::from(2))));
-    test("0x1_0", Pass(ExpressionValue::Integer(BigInt::from(16))));
+    test("0b1_0", Pass(ExpressionValue::Integer(BigInt::from(2), None)));
+    test("0x1_0", Pass(ExpressionValue::Integer(BigInt::from(16), None)));
 
     test("0x", Fail(("test", 1, "invalid")));
 
@@ -72,274 +72,274 @@ fn test_variables() {
 
 #[test]
 fn test_ops_arithmetic() {
-    test("-0", Pass(ExpressionValue::Integer(BigInt::from(0))));
-    test("-1", Pass(ExpressionValue::Integer(BigInt::from(-1))));
-    test("-10", Pass(ExpressionValue::Integer(BigInt::from(-10))));
-    test("--10", Pass(ExpressionValue::Integer(BigInt::from(10))));
+    test("-0", Pass(ExpressionValue::Integer(BigInt::from(0), None)));
+    test("-1", Pass(ExpressionValue::Integer(BigInt::from(-1), None)));
+    test("-10", Pass(ExpressionValue::Integer(BigInt::from(-10), None)));
+    test("--10", Pass(ExpressionValue::Integer(BigInt::from(10), None)));
 
-    test("2 + 2", Pass(ExpressionValue::Integer(BigInt::from(4))));
+    test("2 + 2", Pass(ExpressionValue::Integer(BigInt::from(4), None)));
     test(
         "2 + 2 + 2 + 2",
-        Pass(ExpressionValue::Integer(BigInt::from(8))),
+        Pass(ExpressionValue::Integer(BigInt::from(8), None)),
     );
-    test("2 - 2", Pass(ExpressionValue::Integer(BigInt::from(0))));
+    test("2 - 2", Pass(ExpressionValue::Integer(BigInt::from(0), None)));
     test(
         "2 - 2 - 2 - 2",
-        Pass(ExpressionValue::Integer(BigInt::from(-4))),
+        Pass(ExpressionValue::Integer(BigInt::from(-4), None)),
     );
     test(
         "2 + 2 - 2 + 2",
-        Pass(ExpressionValue::Integer(BigInt::from(4))),
+        Pass(ExpressionValue::Integer(BigInt::from(4), None)),
     );
-    test("2 * 2", Pass(ExpressionValue::Integer(BigInt::from(4))));
+    test("2 * 2", Pass(ExpressionValue::Integer(BigInt::from(4), None)));
     test(
         "2 * 2 * 2 * 2",
-        Pass(ExpressionValue::Integer(BigInt::from(16))),
+        Pass(ExpressionValue::Integer(BigInt::from(16), None)),
     );
-    test("2 / 2", Pass(ExpressionValue::Integer(BigInt::from(1))));
+    test("2 / 2", Pass(ExpressionValue::Integer(BigInt::from(1), None)));
     test(
         "2 / 2 / 2 / 2",
-        Pass(ExpressionValue::Integer(BigInt::from(0))),
+        Pass(ExpressionValue::Integer(BigInt::from(0), None)),
     );
     test(
         "2 * 2 * 2 / 2",
-        Pass(ExpressionValue::Integer(BigInt::from(4))),
+        Pass(ExpressionValue::Integer(BigInt::from(4), None)),
     );
-    test("0 % 2", Pass(ExpressionValue::Integer(BigInt::from(0))));
-    test("1 % 2", Pass(ExpressionValue::Integer(BigInt::from(1))));
-    test("2 % 2", Pass(ExpressionValue::Integer(BigInt::from(0))));
-    test("3 % 2", Pass(ExpressionValue::Integer(BigInt::from(1))));
+    test("0 % 2", Pass(ExpressionValue::Integer(BigInt::from(0), None)));
+    test("1 % 2", Pass(ExpressionValue::Integer(BigInt::from(1), None)));
+    test("2 % 2", Pass(ExpressionValue::Integer(BigInt::from(0), None)));
+    test("3 % 2", Pass(ExpressionValue::Integer(BigInt::from(1), None)));
 
-    test(" 2 * -2", Pass(ExpressionValue::Integer(BigInt::from(-4))));
-    test("-2 *  2", Pass(ExpressionValue::Integer(BigInt::from(-4))));
-    test("-2 * -2", Pass(ExpressionValue::Integer(BigInt::from(4))));
+    test(" 2 * -2", Pass(ExpressionValue::Integer(BigInt::from(-4), None)));
+    test("-2 *  2", Pass(ExpressionValue::Integer(BigInt::from(-4), None)));
+    test("-2 * -2", Pass(ExpressionValue::Integer(BigInt::from(4), None)));
 
-    test(" 2 / -2", Pass(ExpressionValue::Integer(BigInt::from(-1))));
-    test("-2 /  2", Pass(ExpressionValue::Integer(BigInt::from(-1))));
-    test("-2 / -2", Pass(ExpressionValue::Integer(BigInt::from(1))));
+    test(" 2 / -2", Pass(ExpressionValue::Integer(BigInt::from(-1), None)));
+    test("-2 /  2", Pass(ExpressionValue::Integer(BigInt::from(-1), None)));
+    test("-2 / -2", Pass(ExpressionValue::Integer(BigInt::from(1), None)));
 
-    test("1 << 0", Pass(ExpressionValue::Integer(BigInt::from(1))));
-    test("1 << 1", Pass(ExpressionValue::Integer(BigInt::from(2))));
-    test("1 << 2", Pass(ExpressionValue::Integer(BigInt::from(4))));
-    test("1 << 3", Pass(ExpressionValue::Integer(BigInt::from(8))));
-    test("1 << 4", Pass(ExpressionValue::Integer(BigInt::from(16))));
-    test("1 << 5", Pass(ExpressionValue::Integer(BigInt::from(32))));
-    test("1 << 6", Pass(ExpressionValue::Integer(BigInt::from(64))));
-    test("1 << 7", Pass(ExpressionValue::Integer(BigInt::from(128))));
-    test("1 << 8", Pass(ExpressionValue::Integer(BigInt::from(256))));
-    test("1 << 9", Pass(ExpressionValue::Integer(BigInt::from(512))));
+    test("1 << 0", Pass(ExpressionValue::Integer(BigInt::from(1), None)));
+    test("1 << 1", Pass(ExpressionValue::Integer(BigInt::from(2), None)));
+    test("1 << 2", Pass(ExpressionValue::Integer(BigInt::from(4), None)));
+    test("1 << 3", Pass(ExpressionValue::Integer(BigInt::from(8), None)));
+    test("1 << 4", Pass(ExpressionValue::Integer(BigInt::from(16), None)));
+    test("1 << 5", Pass(ExpressionValue::Integer(BigInt::from(32), None)));
+    test("1 << 6", Pass(ExpressionValue::Integer(BigInt::from(64), None)));
+    test("1 << 7", Pass(ExpressionValue::Integer(BigInt::from(128), None)));
+    test("1 << 8", Pass(ExpressionValue::Integer(BigInt::from(256), None)));
+    test("1 << 9", Pass(ExpressionValue::Integer(BigInt::from(512), None)));
 
-    test("-1 << 0", Pass(ExpressionValue::Integer(BigInt::from(-1))));
-    test("-1 << 1", Pass(ExpressionValue::Integer(BigInt::from(-2))));
-    test("-1 << 2", Pass(ExpressionValue::Integer(BigInt::from(-4))));
-    test("-1 << 3", Pass(ExpressionValue::Integer(BigInt::from(-8))));
-    test("-1 << 4", Pass(ExpressionValue::Integer(BigInt::from(-16))));
-    test("-1 << 5", Pass(ExpressionValue::Integer(BigInt::from(-32))));
-    test("-1 << 6", Pass(ExpressionValue::Integer(BigInt::from(-64))));
+    test("-1 << 0", Pass(ExpressionValue::Integer(BigInt::from(-1), None)));
+    test("-1 << 1", Pass(ExpressionValue::Integer(BigInt::from(-2), None)));
+    test("-1 << 2", Pass(ExpressionValue::Integer(BigInt::from(-4), None)));
+    test("-1 << 3", Pass(ExpressionValue::Integer(BigInt::from(-8), None)));
+    test("-1 << 4", Pass(ExpressionValue::Integer(BigInt::from(-16), None)));
+    test("-1 << 5", Pass(ExpressionValue::Integer(BigInt::from(-32), None)));
+    test("-1 << 6", Pass(ExpressionValue::Integer(BigInt::from(-64), None)));
     test(
         "-1 << 7",
-        Pass(ExpressionValue::Integer(BigInt::from(-128))),
+        Pass(ExpressionValue::Integer(BigInt::from(-128), None)),
     );
     test(
         "-1 << 8",
-        Pass(ExpressionValue::Integer(BigInt::from(-256))),
+        Pass(ExpressionValue::Integer(BigInt::from(-256), None)),
     );
     test(
         "-1 << 9",
-        Pass(ExpressionValue::Integer(BigInt::from(-512))),
+        Pass(ExpressionValue::Integer(BigInt::from(-512), None)),
     );
 
-    test("4 >> 0", Pass(ExpressionValue::Integer(BigInt::from(4))));
-    test("4 >> 1", Pass(ExpressionValue::Integer(BigInt::from(2))));
-    test("4 >> 2", Pass(ExpressionValue::Integer(BigInt::from(1))));
-    test("4 >> 3", Pass(ExpressionValue::Integer(BigInt::from(0))));
+    test("4 >> 0", Pass(ExpressionValue::Integer(BigInt::from(4), None)));
+    test("4 >> 1", Pass(ExpressionValue::Integer(BigInt::from(2), None)));
+    test("4 >> 2", Pass(ExpressionValue::Integer(BigInt::from(1), None)));
+    test("4 >> 3", Pass(ExpressionValue::Integer(BigInt::from(0), None)));
 
-    test("-4 >> 0", Pass(ExpressionValue::Integer(BigInt::from(-4))));
-    test("-4 >> 1", Pass(ExpressionValue::Integer(BigInt::from(-2))));
-    test("-4 >> 2", Pass(ExpressionValue::Integer(BigInt::from(-1))));
-    test("-4 >> 3", Pass(ExpressionValue::Integer(BigInt::from(-1))));
+    test("-4 >> 0", Pass(ExpressionValue::Integer(BigInt::from(-4), None)));
+    test("-4 >> 1", Pass(ExpressionValue::Integer(BigInt::from(-2), None)));
+    test("-4 >> 2", Pass(ExpressionValue::Integer(BigInt::from(-1), None)));
+    test("-4 >> 3", Pass(ExpressionValue::Integer(BigInt::from(-1), None)));
 }
 
 #[test]
 fn test_ops_bitmanipulation() {
-    test("! 0", Pass(ExpressionValue::Integer(BigInt::from(-1))));
-    test("! 1", Pass(ExpressionValue::Integer(BigInt::from(-2))));
-    test("!-1", Pass(ExpressionValue::Integer(BigInt::from(0))));
+    test("! 0", Pass(ExpressionValue::Integer(BigInt::from(-1), None)));
+    test("! 1", Pass(ExpressionValue::Integer(BigInt::from(-2), None)));
+    test("!-1", Pass(ExpressionValue::Integer(BigInt::from(0), None)));
 
     test(
         "0b1100 & 0b1010",
-        Pass(ExpressionValue::Integer(BigInt::from(0b1000))),
+        Pass(ExpressionValue::Integer(BigInt::from(0b1000), None)),
     );
     test(
         "0b1100 | 0b1010",
-        Pass(ExpressionValue::Integer(BigInt::from(0b1110))),
+        Pass(ExpressionValue::Integer(BigInt::from(0b1110), None)),
     );
     test(
         "0b1100 ^ 0b1010",
-        Pass(ExpressionValue::Integer(BigInt::from(0b0110))),
+        Pass(ExpressionValue::Integer(BigInt::from(0b0110), None)),
     );
 
-    test(" 1 &  2", Pass(ExpressionValue::Integer(BigInt::from(0))));
-    test("-1 &  2", Pass(ExpressionValue::Integer(BigInt::from(2))));
-    test(" 1 & -2", Pass(ExpressionValue::Integer(BigInt::from(0))));
-    test("-1 & -2", Pass(ExpressionValue::Integer(BigInt::from(-2))));
+    test(" 1 &  2", Pass(ExpressionValue::Integer(BigInt::from(0), None)));
+    test("-1 &  2", Pass(ExpressionValue::Integer(BigInt::from(2), None)));
+    test(" 1 & -2", Pass(ExpressionValue::Integer(BigInt::from(0), None)));
+    test("-1 & -2", Pass(ExpressionValue::Integer(BigInt::from(-2), None)));
 
-    test(" 1 |  2", Pass(ExpressionValue::Integer(BigInt::from(3))));
-    test("-1 |  2", Pass(ExpressionValue::Integer(BigInt::from(-1))));
-    test(" 1 | -2", Pass(ExpressionValue::Integer(BigInt::from(-1))));
-    test("-1 | -2", Pass(ExpressionValue::Integer(BigInt::from(-1))));
+    test(" 1 |  2", Pass(ExpressionValue::Integer(BigInt::from(3), None)));
+    test("-1 |  2", Pass(ExpressionValue::Integer(BigInt::from(-1), None)));
+    test(" 1 | -2", Pass(ExpressionValue::Integer(BigInt::from(-1), None)));
+    test("-1 | -2", Pass(ExpressionValue::Integer(BigInt::from(-1), None)));
 
-    test(" 1 ^  2", Pass(ExpressionValue::Integer(BigInt::from(3))));
-    test("-1 ^  2", Pass(ExpressionValue::Integer(BigInt::from(-3))));
-    test(" 1 ^ -2", Pass(ExpressionValue::Integer(BigInt::from(-1))));
-    test("-1 ^ -2", Pass(ExpressionValue::Integer(BigInt::from(1))));
+    test(" 1 ^  2", Pass(ExpressionValue::Integer(BigInt::from(3), None)));
+    test("-1 ^  2", Pass(ExpressionValue::Integer(BigInt::from(-3), None)));
+    test(" 1 ^ -2", Pass(ExpressionValue::Integer(BigInt::from(-1), None)));
+    test("-1 ^ -2", Pass(ExpressionValue::Integer(BigInt::from(1), None)));
 
     test(
         " 0x0001 & 0xffff",
-        Pass(ExpressionValue::Integer(BigInt::from(1))),
+        Pass(ExpressionValue::Integer(BigInt::from(1), None)),
     );
     test(
         "-0x0001 & 0xffff",
-        Pass(ExpressionValue::Integer(BigInt::from(0xffff))),
+        Pass(ExpressionValue::Integer(BigInt::from(0xffff), None)),
     );
     test(
         " 0x0001 | 0xffff",
-        Pass(ExpressionValue::Integer(BigInt::from(0xffff))),
+        Pass(ExpressionValue::Integer(BigInt::from(0xffff), None)),
     );
     test(
         "-0x0001 | 0xffff",
-        Pass(ExpressionValue::Integer(BigInt::from(-1))),
+        Pass(ExpressionValue::Integer(BigInt::from(-1), None)),
     );
     test(
         " 0x0001 ^ 0xffff",
-        Pass(ExpressionValue::Integer(BigInt::from(0xfffe))),
+        Pass(ExpressionValue::Integer(BigInt::from(0xfffe), None)),
     );
     test(
         "-0x0001 ^ 0xffff",
-        Pass(ExpressionValue::Integer(BigInt::from(-0x10000))),
+        Pass(ExpressionValue::Integer(BigInt::from(-0x10000), None)),
     );
 
     test(
         "0xffff &  0x0001",
-        Pass(ExpressionValue::Integer(BigInt::from(1))),
+        Pass(ExpressionValue::Integer(BigInt::from(1), None)),
     );
     test(
         "0xffff & -0x0001",
-        Pass(ExpressionValue::Integer(BigInt::from(0xffff))),
+        Pass(ExpressionValue::Integer(BigInt::from(0xffff), None)),
     );
     test(
         "0xffff |  0x0001",
-        Pass(ExpressionValue::Integer(BigInt::from(0xffff))),
+        Pass(ExpressionValue::Integer(BigInt::from(0xffff), None)),
     );
     test(
         "0xffff | -0x0001",
-        Pass(ExpressionValue::Integer(BigInt::from(-1))),
+        Pass(ExpressionValue::Integer(BigInt::from(-1), None)),
     );
     test(
         "0xffff ^  0x0001",
-        Pass(ExpressionValue::Integer(BigInt::from(0xfffe))),
+        Pass(ExpressionValue::Integer(BigInt::from(0xfffe), None)),
     );
     test(
         "0xffff ^ -0x0001",
-        Pass(ExpressionValue::Integer(BigInt::from(-0x10000))),
+        Pass(ExpressionValue::Integer(BigInt::from(-0x10000), None)),
     );
 }
 
 #[test]
 fn test_ops_slice() {
-    test("8'0x00", Pass(ExpressionValue::Integer(BigInt::from(0))));
-    test("8'0x0f", Pass(ExpressionValue::Integer(BigInt::from(0xf))));
-    test("8'0xff", Pass(ExpressionValue::Integer(BigInt::from(0xff))));
+    test("8'0x00", Pass(ExpressionValue::Integer(BigInt::from(0), None)));
+    test("8'0x0f", Pass(ExpressionValue::Integer(BigInt::from(0xf), None)));
+    test("8'0xff", Pass(ExpressionValue::Integer(BigInt::from(0xff), None)));
 
-    test("0x00[0:0]", Pass(ExpressionValue::Integer(BigInt::from(0))));
-    test("0x0f[0:0]", Pass(ExpressionValue::Integer(BigInt::from(1))));
-    test("0xff[0:0]", Pass(ExpressionValue::Integer(BigInt::from(1))));
+    test("0x00[0:0]", Pass(ExpressionValue::Integer(BigInt::from(0), None)));
+    test("0x0f[0:0]", Pass(ExpressionValue::Integer(BigInt::from(1), None)));
+    test("0xff[0:0]", Pass(ExpressionValue::Integer(BigInt::from(1), None)));
 
-    test("0x00[7:0]", Pass(ExpressionValue::Integer(BigInt::from(0))));
+    test("0x00[7:0]", Pass(ExpressionValue::Integer(BigInt::from(0), None)));
     test(
         "0x0f[7:0]",
-        Pass(ExpressionValue::Integer(BigInt::from(0xf))),
+        Pass(ExpressionValue::Integer(BigInt::from(0xf), None)),
     );
     test(
         "0xff[7:0]",
-        Pass(ExpressionValue::Integer(BigInt::from(0xff))),
+        Pass(ExpressionValue::Integer(BigInt::from(0xff), None)),
     );
 
-    test("0x00[8:1]", Pass(ExpressionValue::Integer(BigInt::from(0))));
+    test("0x00[8:1]", Pass(ExpressionValue::Integer(BigInt::from(0), None)));
     test(
         "0x0f[8:1]",
-        Pass(ExpressionValue::Integer(BigInt::from(0x7))),
+        Pass(ExpressionValue::Integer(BigInt::from(0x7), None)),
     );
     test(
         "0xff[8:1]",
-        Pass(ExpressionValue::Integer(BigInt::from(0x7f))),
+        Pass(ExpressionValue::Integer(BigInt::from(0x7f), None)),
     );
 
     test(
         "0x12345678[ 3: 0]",
-        Pass(ExpressionValue::Integer(BigInt::from(0x8))),
+        Pass(ExpressionValue::Integer(BigInt::from(0x8), None)),
     );
     test(
         "0x12345678[ 7: 4]",
-        Pass(ExpressionValue::Integer(BigInt::from(0x7))),
+        Pass(ExpressionValue::Integer(BigInt::from(0x7), None)),
     );
     test(
         "0x12345678[11: 8]",
-        Pass(ExpressionValue::Integer(BigInt::from(0x6))),
+        Pass(ExpressionValue::Integer(BigInt::from(0x6), None)),
     );
     test(
         "0x12345678[15:12]",
-        Pass(ExpressionValue::Integer(BigInt::from(0x5))),
+        Pass(ExpressionValue::Integer(BigInt::from(0x5), None)),
     );
     test(
         "0x12345678[19:16]",
-        Pass(ExpressionValue::Integer(BigInt::from(0x4))),
+        Pass(ExpressionValue::Integer(BigInt::from(0x4), None)),
     );
     test(
         "0x12345678[23:20]",
-        Pass(ExpressionValue::Integer(BigInt::from(0x3))),
+        Pass(ExpressionValue::Integer(BigInt::from(0x3), None)),
     );
     test(
         "0x12345678[27:24]",
-        Pass(ExpressionValue::Integer(BigInt::from(0x2))),
+        Pass(ExpressionValue::Integer(BigInt::from(0x2), None)),
     );
     test(
         "0x12345678[31:28]",
-        Pass(ExpressionValue::Integer(BigInt::from(0x1))),
+        Pass(ExpressionValue::Integer(BigInt::from(0x1), None)),
     );
 
     test(
         "-0x01[7:0]",
-        Pass(ExpressionValue::Integer(BigInt::from(0xff))),
+        Pass(ExpressionValue::Integer(BigInt::from(0xff), None)),
     );
     test(
         "-0x08[7:0]",
-        Pass(ExpressionValue::Integer(BigInt::from(0xf8))),
+        Pass(ExpressionValue::Integer(BigInt::from(0xf8), None)),
     );
     test(
         "-0x7f[7:0]",
-        Pass(ExpressionValue::Integer(BigInt::from(0x81))),
+        Pass(ExpressionValue::Integer(BigInt::from(0x81), None)),
     );
     test(
         "-0x80[7:0]",
-        Pass(ExpressionValue::Integer(BigInt::from(0x80))),
+        Pass(ExpressionValue::Integer(BigInt::from(0x80), None)),
     );
     test(
         "-0x81[7:0]",
-        Pass(ExpressionValue::Integer(BigInt::from(0x7f))),
+        Pass(ExpressionValue::Integer(BigInt::from(0x7f), None)),
     );
 
     test(
         " 0[1000:1000]",
-        Pass(ExpressionValue::Integer(BigInt::from(0))),
+        Pass(ExpressionValue::Integer(BigInt::from(0), None)),
     );
     test(
         " 1[1000:1000]",
-        Pass(ExpressionValue::Integer(BigInt::from(0))),
+        Pass(ExpressionValue::Integer(BigInt::from(0), None)),
     );
     test(
         "-1[1000:1000]",
-        Pass(ExpressionValue::Integer(BigInt::from(1))),
+        Pass(ExpressionValue::Integer(BigInt::from(1), None)),
     );
 
     test("0'0x100", Fail(("test", 1, "invalid")));
@@ -357,51 +357,51 @@ fn test_ops_slice() {
 fn test_ops_concat() {
     test(
         "8'0     @ 8'0",
-        Pass(ExpressionValue::Integer(BigInt::from(0))),
+        Pass(ExpressionValue::Integer(BigInt::from(0), None)),
     );
     test(
         "8'0x12  @ 8'0x34",
-        Pass(ExpressionValue::Integer(BigInt::from(0x1234))),
+        Pass(ExpressionValue::Integer(BigInt::from(0x1234), None)),
     );
     test(
         "16'0x12 @ 16'0x34",
-        Pass(ExpressionValue::Integer(BigInt::from(0x120034))),
+        Pass(ExpressionValue::Integer(BigInt::from(0x120034), None)),
     );
 
     test(
         "(6 + 6)[3:0] @ (5 + 5)[3:0]",
-        Pass(ExpressionValue::Integer(BigInt::from(0xca))),
+        Pass(ExpressionValue::Integer(BigInt::from(0xca), None)),
     );
 
     test(
         "6'4 @ 5'0",
-        Pass(ExpressionValue::Integer(BigInt::from(0b10000000))),
+        Pass(ExpressionValue::Integer(BigInt::from(0b10000000), None)),
     );
 
     test(
         "4'0x8 @ 4'0x1",
-        Pass(ExpressionValue::Integer(BigInt::from(0x81))),
+        Pass(ExpressionValue::Integer(BigInt::from(0x81), None)),
     );
     test(
         "4'0x0 @ 4'0x0 @ 4'0x8 @ 4'0x9",
-        Pass(ExpressionValue::Integer(BigInt::from(0x89))),
+        Pass(ExpressionValue::Integer(BigInt::from(0x89), None)),
     );
     test(
         "0x1 @ (4'0x0 @ 4'0x0 @ 4'0x8 @ 4'0x9)",
-        Pass(ExpressionValue::Integer(BigInt::from(0x10089))),
+        Pass(ExpressionValue::Integer(BigInt::from(0x10089), None)),
     );
 
     test(
         "0x0 @ 0x8000[19:0]",
-        Pass(ExpressionValue::Integer(BigInt::from(0x8000))),
+        Pass(ExpressionValue::Integer(BigInt::from(0x8000), None)),
     );
     test(
         "0x1 @ 0x8000[19:0]",
-        Pass(ExpressionValue::Integer(BigInt::from(0x108000))),
+        Pass(ExpressionValue::Integer(BigInt::from(0x108000), None)),
     );
     test(
         "0x1 @ 0x9000[19:0]",
-        Pass(ExpressionValue::Integer(BigInt::from(0x109000))),
+        Pass(ExpressionValue::Integer(BigInt::from(0x109000), None)),
     );
 
     test("  0 @   0", Fail(("test", 1, "known width")));
@@ -504,22 +504,22 @@ fn test_ops_lazy() {
 fn test_ops_ternary() {
     test(
         "(1 == 1) ? 123",
-        Pass(ExpressionValue::Integer(BigInt::from(123))),
+        Pass(ExpressionValue::Integer(BigInt::from(123), None)),
     );
     test("(1 == 0) ? 123", Pass(ExpressionValue::Void));
 
     test(
         "(1 == 1) ? 123 : 456",
-        Pass(ExpressionValue::Integer(BigInt::from(123))),
+        Pass(ExpressionValue::Integer(BigInt::from(123), None)),
     );
     test(
         "(1 == 0) ? 123 : 456",
-        Pass(ExpressionValue::Integer(BigInt::from(456))),
+        Pass(ExpressionValue::Integer(BigInt::from(456), None)),
     );
 
     test(
         "(1 == 1) ? 123 : (1 == 1)",
-        Pass(ExpressionValue::Integer(BigInt::from(123))),
+        Pass(ExpressionValue::Integer(BigInt::from(123), None)),
     );
     test(
         "(1 == 0) ? 123 : (1 == 1)",
@@ -531,18 +531,18 @@ fn test_ops_ternary() {
     );
     test(
         "(1 == 0) ? (1 == 1) : 123",
-        Pass(ExpressionValue::Integer(BigInt::from(123))),
+        Pass(ExpressionValue::Integer(BigInt::from(123), None)),
     );
 
     test(
         "(1 == 1) ? 123 : (1 / 0)",
-        Pass(ExpressionValue::Integer(BigInt::from(123))),
+        Pass(ExpressionValue::Integer(BigInt::from(123), None)),
     );
     test("(1 == 0) ? 123 : (1 / 0)", Fail(("test", 1, "zero")));
     test("(1 == 1) ? (1 / 0) : 123", Fail(("test", 1, "zero")));
     test(
         "(1 == 0) ? (1 / 0) : 123",
-        Pass(ExpressionValue::Integer(BigInt::from(123))),
+        Pass(ExpressionValue::Integer(BigInt::from(123), None)),
     );
 
     test("123 ? 456 : 789", Fail(("test", 1, "type")));
@@ -573,15 +573,15 @@ fn test_ops_type_errors() {
 fn test_precedence() {
     test(
         " 2 +  2  * 2 ",
-        Pass(ExpressionValue::Integer(BigInt::from(6))),
+        Pass(ExpressionValue::Integer(BigInt::from(6), None)),
     );
     test(
         " 2 + (2  * 2)",
-        Pass(ExpressionValue::Integer(BigInt::from(6))),
+        Pass(ExpressionValue::Integer(BigInt::from(6), None)),
     );
     test(
         "(2 +  2) * 2 ",
-        Pass(ExpressionValue::Integer(BigInt::from(8))),
+        Pass(ExpressionValue::Integer(BigInt::from(8), None)),
     );
 
     test("1 + 2 == 2 + 1", Pass(ExpressionValue::Bool(true)));
@@ -612,18 +612,18 @@ fn test_precedence() {
 #[test]
 fn test_blocks() {
     test("{}", Pass(ExpressionValue::Void));
-    test("{0}", Pass(ExpressionValue::Integer(BigInt::from(0))));
-    test("{0,}", Pass(ExpressionValue::Integer(BigInt::from(0))));
-    test("{0 \n }", Pass(ExpressionValue::Integer(BigInt::from(0))));
-    test("{0,\n }", Pass(ExpressionValue::Integer(BigInt::from(0))));
-    test("{0,   1}", Pass(ExpressionValue::Integer(BigInt::from(1))));
-    test("{0 \n 1}", Pass(ExpressionValue::Integer(BigInt::from(1))));
+    test("{0}", Pass(ExpressionValue::Integer(BigInt::from(0), None)));
+    test("{0,}", Pass(ExpressionValue::Integer(BigInt::from(0), None)));
+    test("{0 \n }", Pass(ExpressionValue::Integer(BigInt::from(0), None)));
+    test("{0,\n }", Pass(ExpressionValue::Integer(BigInt::from(0), None)));
+    test("{0,   1}", Pass(ExpressionValue::Integer(BigInt::from(1), None)));
+    test("{0 \n 1}", Pass(ExpressionValue::Integer(BigInt::from(1), None)));
 
     test("{0 1}", Fail(("test", 1, "`,`")));
 
     test(
         "{1 + 2, 3} + {4, 5 + 6}",
-        Pass(ExpressionValue::Integer(BigInt::from(14))),
+        Pass(ExpressionValue::Integer(BigInt::from(14), None)),
     );
 }
 
@@ -638,38 +638,38 @@ fn test_assignment() {
     test("   x  = 123", Pass(ExpressionValue::Void));
     test(
         "{  x  = 123, x }",
-        Pass(ExpressionValue::Integer(BigInt::from(123))),
+        Pass(ExpressionValue::Integer(BigInt::from(123), None)),
     );
     test(
         "{ (x) = 123, x }",
-        Pass(ExpressionValue::Integer(BigInt::from(123))),
+        Pass(ExpressionValue::Integer(BigInt::from(123), None)),
     );
 
     test(
         "{ x = 123, y = 321,            x + y }",
-        Pass(ExpressionValue::Integer(BigInt::from(444))),
+        Pass(ExpressionValue::Integer(BigInt::from(444), None)),
     );
     test(
         "{ x = 123, y = x * 2,          x + y }",
-        Pass(ExpressionValue::Integer(BigInt::from(369))),
+        Pass(ExpressionValue::Integer(BigInt::from(369), None)),
     );
     test(
         "{ x = 123, y = x * 2, x = 753, x + y }",
-        Pass(ExpressionValue::Integer(BigInt::from(999))),
+        Pass(ExpressionValue::Integer(BigInt::from(999), None)),
     );
 
     test(
         "{ x = 123, y = 456, x < y ? min = x : min = y, min }",
-        Pass(ExpressionValue::Integer(BigInt::from(123))),
+        Pass(ExpressionValue::Integer(BigInt::from(123), None)),
     );
     test(
         "{ x = 456, y = 123, x < y ? min = x : min = y, min }",
-        Pass(ExpressionValue::Integer(BigInt::from(123))),
+        Pass(ExpressionValue::Integer(BigInt::from(123), None)),
     );
 
     test(
         "{ x = 123, y = 456, x < y ? min = x,           min }",
-        Pass(ExpressionValue::Integer(BigInt::from(123))),
+        Pass(ExpressionValue::Integer(BigInt::from(123), None)),
     );
     test(
         "{ x = 456, y = 123, x < y ? min = x,           min }",

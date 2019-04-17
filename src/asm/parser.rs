@@ -488,7 +488,7 @@ impl<'a> AssemblerParser<'a> {
             let addr = self
                 .state
                 .get_cur_address(self.parser.report.clone(), &tk_name.span)?;
-            ExpressionValue::Integer(BigInt::from(addr))
+            ExpressionValue::Integer(BigInt::from(addr), None)
         };
 
         if is_local {
@@ -637,7 +637,7 @@ impl<'a> AssemblerParser<'a> {
             &expr,
             &mut ExpressionEvalContext::new(),
         ) {
-            Ok(ExpressionValue::Integer(value)) => value,
+            Ok(ExpressionValue::Integer(value, _)) => value,
             Ok(_) => {
                 return Err(self
                     .parser

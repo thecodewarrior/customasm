@@ -305,7 +305,7 @@ impl<'t> CpuDefParser<'t> {
 
         self.parser.expect(TokenKind::Colon)?;
 
-        let value = ExpressionValue::Integer(BigInt::from(self.parser.expect_usize()?.1));
+        let value = ExpressionValue::Integer(BigInt::from(self.parser.expect_usize()?.1), None);
 
         tokendef.tokens.insert(tokens, value);
 
@@ -500,36 +500,24 @@ impl<'t> CpuDefParser<'t> {
     fn parse_rule_production(&mut self, rule: &mut Rule) -> Result<(), ()> {
         let expr = Expression::parse(&mut self.parser)?;
 
-        let width = match expr.width(&self.state.functions) {
-            Some(w) => w,
-            None => {
+        rule.width = expr.width(&self.state.functions);
+        if let Some(width) = rule.width {
+            if width % self.bits.unwrap() != 0 {
                 self.parser.report.debug_span(
                     format!("\n{}", expr.tree(&self.state.functions)),
                     &expr.span(),
                 );
                 self.parser.report.error_span(
-                    "width of expression not known; try using a bit slice like `x[hi:lo]`",
+                    format!(
+                        "expression width (= {}) is not a multiple of the CPU's byte width (= {})",
+                        width,
+                        self.bits.unwrap()
+                    ),
                     &expr.returned_value_span(),
                 );
                 return Err(());
             }
         };
-
-        if width % self.bits.unwrap() != 0 {
-            self.parser.report.debug_span(
-                format!("\n{}", expr.tree(&self.state.functions)),
-                &expr.span(),
-            );
-            self.parser.report.error_span(
-                format!(
-                    "expression width (= {}) is not a multiple of the CPU's byte width (= {})",
-                    width,
-                    self.bits.unwrap()
-                ),
-                &expr.returned_value_span(),
-            );
-            return Err(());
-        }
 
         rule.production = expr;
 
@@ -538,5 +526,5 @@ impl<'t> CpuDefParser<'t> {
 }
 
 fn is_reserved_var(name: &str) -> bool {
-    name == "pc"
+    name == "pc" || name == "void" || name == "true" || name == "false"
 }

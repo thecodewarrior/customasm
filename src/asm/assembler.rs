@@ -359,27 +359,29 @@ impl AssemblerState {
             args_eval_ctx.set_local(rule.params[i].name.clone(), instr.args[i].clone().unwrap());
         }
 
-        // Output binary representation.
+        // Set up local variables
         let word_size = &self.cpudef.as_ref().unwrap().bits;
-        let instr_width_bits = rule.production.width(&self.functions).unwrap();
-        let instr_width = instr_width_bits / word_size;
-
         let insn_start_pc = match instr.ctx.get_address_at(report.clone(), self, &instr.span) {
             Ok(value) => value.to_bigint().unwrap(),
             Err(_) => return Err(()),
         };
         args_eval_ctx.set_local(
             "_insn_start",
-            ExpressionValue::Integer(insn_start_pc.clone()),
+            ExpressionValue::Integer(insn_start_pc.clone(), None),
         );
-        args_eval_ctx.set_local(
-            "_insn_end",
-            ExpressionValue::Integer(insn_start_pc.clone() + instr_width),
-        );
-        args_eval_ctx.set_local(
-            "_insn_width",
-            ExpressionValue::Integer(instr_width.to_bigint().unwrap()),
-        );
+
+        if let Some(width) = rule.width {
+            let instr_width = width / word_size;
+
+            args_eval_ctx.set_local(
+                "_insn_end",
+                ExpressionValue::Integer(insn_start_pc.clone() + instr_width, None),
+            );
+            args_eval_ctx.set_local(
+                "_insn_width",
+                ExpressionValue::Integer(instr_width.to_bigint().unwrap(), None),
+            );
+        }
 
         let _guard = report.push_parent("failed to resolve instruction", &instr.span);
 
@@ -389,11 +391,39 @@ impl AssemblerState {
             &rule.production,
             &mut args_eval_ctx,
         )?;
+        let value_width = match value {
+            ExpressionValue::Integer(_, Some(w)) => w,
+            ExpressionValue::Integer(_, None) => panic!("indeterminate value width"),
+            _ => panic!("not an integer result")
+        };
+
+        if let Some(w) = rule.width {
+            if w != value_width {
+                report.error_span(format!("predicted and actual width disagree ({}, and {} bits respectively)", w, value_width), &rule.production.returned_value_span());
+                return Err(())
+            }
+        }
+
+        if value_width % word_size != 0 {
+            report.debug_span(
+                format!("\n{}", rule.production.tree(&self.functions)),
+                &rule.production.span(),
+            );
+            report.error_span(
+                format!(
+                    "value width (= {}) is not a multiple of the CPU's byte width (= {})",
+                    value_width,
+                    word_size
+                ),
+                &rule.production.returned_value_span(),
+            );
+            return Err(());
+        }
 
         let block = &mut self.blocks[instr.ctx.block];
 
-        for i in 0..instr_width_bits {
-            let bit = value.get_bit(instr_width_bits - 1 - i);
+        for i in 0..value_width {
+            let bit = value.get_bit(value_width - 1 - i);
             block.write(instr.ctx.offset + i, bit);
         }
 
@@ -461,9 +491,14 @@ impl AssemblerState {
         if name == "pc" {
             Ok(ExpressionValue::Integer(
                 ctx.get_address_at(report, self, span)?.to_bigint().unwrap(),
+                None,
             ))
         } else if name == "void" {
             Ok(ExpressionValue::Void)
+        } else if name == "true" {
+            Ok(ExpressionValue::Bool(true))
+        } else if name == "false" {
+            Ok(ExpressionValue::Bool(false))
         } else if let Some('.') = name.chars().next() {
             if self.labels.local_exists(ctx.label_ctx, name) {
                 Ok(self.labels.get_local(ctx.label_ctx, name).unwrap().clone())

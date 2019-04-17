@@ -22,7 +22,7 @@ impl LabelManager {
             name_to_index_map: HashMap::new(),
         };
 
-        mngr.add_global("", ExpressionValue::Integer(BigInt::zero()));
+        mngr.add_global("", ExpressionValue::Integer(BigInt::zero(), Some(0)));
         mngr
     }
 

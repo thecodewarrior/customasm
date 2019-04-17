@@ -348,7 +348,7 @@ impl RulePatternMatcher {
 
             if value.is_some() {
                 match &value.as_ref().unwrap() {
-                    &ExpressionValue::Integer(ref bigint) => print!(" (= {})", bigint),
+                    &ExpressionValue::Integer(ref bigint, _) => print!(" (= {})", bigint),
                     _ => unreachable!(),
                 }
             }

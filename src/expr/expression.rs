@@ -52,7 +52,7 @@ pub enum Expression {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ExpressionValue {
     Void,
-    Integer(BigInt),
+    Integer(BigInt, Option<usize>),
     Bool(bool),
     String(String),
     Function(String),
@@ -123,7 +123,7 @@ impl fmt::Display for ExpressionValue {
             "{}",
             match self {
                 ExpressionValue::Void => format!("Void"),
-                ExpressionValue::Integer(ref value) => format!("Integer({})", value),
+                ExpressionValue::Integer(ref value, width) => format!("Integer({}, {:?})", value, width),
                 ExpressionValue::Bool(value) => format!("Bool({})", value),
                 ExpressionValue::String(value) => format!("String({:?})", value),
                 ExpressionValue::Function(value) => format!("Function({:?})", value),
