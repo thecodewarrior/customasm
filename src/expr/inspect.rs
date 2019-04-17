@@ -22,7 +22,7 @@ impl Expression
 				Some(lhs_width.unwrap() + rhs_width.unwrap())
 			}
 			
-			&Expression::BitSlice(_, _, left, right, _) => Some(left + 1 - right),
+			&Expression::BitSlice(_, _, left, right, _) => Some(left - right),
 			
 			&Expression::TernaryOp(_, _, ref true_branch, ref false_branch) =>
 			{
@@ -70,10 +70,10 @@ impl Expression
 	{
 		match self
 		{
-			&Expression::BinaryOp(_, _, BinaryOp::Concat, _, _) => self.width(functions).map(|w| (w - 1, 0)),
+			&Expression::BinaryOp(_, _, BinaryOp::Concat, _, _) => self.width(functions).map(|w| (w, 0)),
 			&Expression::BitSlice(_, _, left, right, _) => Some((left, right)),
 			
-			&Expression::TernaryOp(_, _, _, _) => self.width(functions).map(|w| (w - 1, 0)),
+			&Expression::TernaryOp(_, _, _, _) => self.width(functions).map(|w| (w, 0)),
 			
 			&Expression::Block(_, ref exprs) =>
 			{

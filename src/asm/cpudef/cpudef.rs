@@ -443,9 +443,15 @@ impl<'t> CpuDefParser<'t>
 				return Err(())
 			}
 		};
-		
-		if width % self.bits.unwrap() != 0
-			{ return Err(self.parser.report.error_span(format!("expression width (= {}) is not a multiple of the CPU's byte width (= {})", width, self.bits.unwrap()), &expr.returned_value_span())); }
+
+		if width % self.bits.unwrap() != 0 {
+			self.parser.report.debug_span(format!("\n{}", expr.tree(&self.state.functions)), &expr.span());
+			self.parser.report.error_span(
+				format!("expression width (= {}) is not a multiple of the CPU's byte width (= {})", width, self.bits.unwrap()),
+				&expr.returned_value_span()
+			);
+			return Err(());
+		}
 		
 		rule.production = expr;
 		

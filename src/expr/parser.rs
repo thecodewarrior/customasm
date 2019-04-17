@@ -417,13 +417,13 @@ impl<'a> ExpressionParser<'a>
 		
 		match width
 		{
-			Some(width) => Ok(Expression::BitSlice(span.clone(), span, width - 1, 0, Box::new(expr))),
+			Some(width) => Ok(Expression::BitSlice(span.clone(), span, width, 0, Box::new(expr))),
 			
 			None => match radix_bits
 			{
 				None => Ok(expr),
 				
-				Some(radix_bits) => Ok(Expression::BitSlice(span.clone(), span, radix_bits * digit_num - 1, 0, Box::new(expr)))
+				Some(radix_bits) => Ok(Expression::BitSlice(span.clone(), span, radix_bits * digit_num, 0, Box::new(expr)))
 			}
 		}
 	}
