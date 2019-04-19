@@ -32,6 +32,7 @@ pub struct ParsedInstruction {
     pub span: Span,
     pub exprs: Vec<Expression>,
     pub args: Vec<Option<ExpressionValue>>,
+    pub result_width: Option<usize>,
 }
 
 pub struct ParsedExpression {
@@ -420,12 +421,27 @@ impl AssemblerState {
             return Err(());
         }
 
+        if instr.result_width.is_some() && value_width != instr.result_width.unwrap() {
+            report.error_span(
+                format!(
+                    "value width (= {}) is not equal to previously emitted value width (= {}). \
+                    Maybe the width changed while filling in future labels?",
+                    value_width,
+                    instr.result_width.unwrap()
+                ),
+                &rule.production.returned_value_span(),
+            );
+            return Err(());
+        }
+
         let block = &mut self.blocks[instr.ctx.block];
 
         for i in 0..value_width {
             let bit = value.get_bit(value_width - 1 - i);
             block.write(instr.ctx.offset + i, bit);
         }
+
+        instr.result_width = Some(value_width);
 
         Ok(())
     }

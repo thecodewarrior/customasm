@@ -10,6 +10,7 @@ use syntax::excerpt_as_string_contents;
 use syntax::{tokenize, Parser, Token, TokenKind};
 use util::filename_navigate;
 use util::FileServer;
+use num_bigint::ToBigInt;
 
 pub struct AssemblerParser<'a> {
     pub fileserver: &'a FileServer,
@@ -568,24 +569,27 @@ impl<'a> AssemblerParser<'a> {
         if args.iter().any(|a| a.is_none()) {
             let rule_index = *instr_match.rule_indices.last().unwrap();
 
-            let parsed_instr = ParsedInstruction {
+            let placeholder_args: Vec<Option<ExpressionValue>> = args.iter().map(|it|
+                Some(it.clone().unwrap_or(ExpressionValue::Integer(0.to_bigint().unwrap(), None)))
+            ).collect();
+
+            let mut parsed_instr = ParsedInstruction {
                 rule_index: rule_index,
                 span: instr_span.clone(),
                 ctx: ctx,
                 exprs: instr_match.exprs,
-                args: args,
+                args: placeholder_args,
+                result_width: None,
             };
+
+            let value = self.state
+                .output_parsed_instr(self.parser.report.clone(), &mut parsed_instr);
+
+            parsed_instr.args = args;
 
             self.state.parsed_instrs.push(parsed_instr);
 
-            // Also output zero bits to advance the current address.
-            let instr_width = {
-                let rule = &self.state.cpudef.as_ref().unwrap().rules[rule_index];
-                rule.production.width(&self.state.functions).unwrap()
-            };
-
-            self.state
-                .output_zero_bits(self.parser.report.clone(), instr_width, false, &instr_span)
+            value
         }
         // ...or if all arguments could be resolved, output instruction now.
         else {
@@ -619,6 +623,7 @@ impl<'a> AssemblerParser<'a> {
                 ctx: ctx,
                 exprs: instr_match.exprs,
                 args: args,
+                result_width: None,
             };
 
             self.state
