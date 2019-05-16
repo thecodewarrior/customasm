@@ -96,6 +96,7 @@ impl FileServer for FileServerReal {
         filename: &str,
         span: Option<&Span>,
     ) -> Result<Vec<u8>, ()> {
+        let _flame_guard = flame::start_guard("read file");
         let filename_path = &Path::new(filename);
 
         if !filename_path.exists() {

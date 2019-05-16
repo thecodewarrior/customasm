@@ -6,6 +6,7 @@ pub use self::excerpt::excerpt_as_bigint;
 pub use self::excerpt::excerpt_as_string_contents;
 pub use self::excerpt::excerpt_as_usize;
 pub use self::parser::Parser;
+pub use self::parser::ParserState;
 pub use self::token::tokenize;
 pub use self::token::Token;
 pub use self::token::TokenKind;

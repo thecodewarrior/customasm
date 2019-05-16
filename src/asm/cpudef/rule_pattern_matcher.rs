@@ -1,5 +1,5 @@
 use asm::cpudef::{CustomTokenDef, Rule, RuleParameterType, RulePatternPart};
-use diagn::RcReport;
+use diagn::{RcReport, Span};
 use expr::{Expression, ExpressionValue};
 use std::collections::HashMap;
 use syntax::{Parser, TokenKind};
@@ -13,7 +13,7 @@ pub struct RulePatternMatcher {
 struct MatchStep {
     rule_indices: Vec<usize>,
     children_exact: HashMap<MatchStepExact, MatchStep>,
-    children_compound: HashMap<MatchStepCompound, (Option<ExpressionValue>, MatchStep)>,
+    children_compound: Vec<(MatchStepCompound, MatchStep)>,
     children_param: HashMap<MatchStepParameter, MatchStep>,
 }
 
@@ -23,9 +23,10 @@ struct MatchStepExact {
     excerpt: Option<String>,
 }
 
-#[derive(Debug, Eq, PartialEq, Hash, Clone)]
+#[derive(Debug, Clone)]
 struct MatchStepCompound {
-    tokens: Vec<MatchStepExact>,
+    span: Span,
+    tokens: HashMap<Vec<MatchStepExact>, ExpressionValue>,
 }
 
 #[derive(Debug, Eq, PartialEq, Hash)]
@@ -35,6 +36,33 @@ struct MatchStepParameter;
 pub struct Match {
     pub rule_indices: Vec<usize>,
     pub exprs: Vec<Expression>,
+}
+
+struct MatchStats {
+    exact_count: usize,
+    compound_count: usize,
+    param_count: usize
+}
+
+impl MatchStats {
+    fn new(root_step: &MatchStep) -> MatchStats {
+        let mut stats = MatchStats {
+            exact_count: 0,
+            compound_count: 0,
+            param_count: 0
+        };
+        stats.walk(root_step);
+        return stats
+    }
+
+    fn walk(&mut self, step: &MatchStep) {
+        self.exact_count += step.children_exact.len();
+        self.param_count += step.children_param.len();
+        self.compound_count += step.children_compound.len();
+        step.children_exact.iter().for_each(|s| self.walk(&s.1));
+        step.children_param.iter().for_each(|s| self.walk(&s.1));
+        step.children_compound.iter().for_each(|s| self.walk(&s.1));
+    }
 }
 
 impl RulePatternMatcher {
@@ -56,6 +84,12 @@ impl RulePatternMatcher {
             )?;
         }
 
+        let stats = MatchStats::new(&root_step);
+        println!(
+            "Pattern stats:\n    exact steps: {}\n    param steps: {}\n    compound steps: {}",
+            stats.exact_count, stats.param_count, stats.compound_count
+        );
+
         Ok(RulePatternMatcher {
             root_step: root_step,
         })
@@ -76,7 +110,7 @@ impl RulePatternMatcher {
         }
 
         match next_parts[0] {
-            RulePatternPart::Exact(kind, ref excerpt) => {
+            RulePatternPart::Exact(ref span, kind, ref excerpt) => {
                 let step_kind = MatchStepExact {
                     kind,
                     excerpt: excerpt.as_ref().map(|s| s.to_ascii_lowercase()),
@@ -105,59 +139,53 @@ impl RulePatternMatcher {
                 step.children_exact.insert(step_kind, next_step);
             }
 
-            RulePatternPart::Parameter(param_index) => {
+            RulePatternPart::Parameter(ref span, param_index) => {
                 if let RuleParameterType::CustomTokenDef(tokendef_index) =
                     rule.params[param_index].typ
                 {
-                    let custom_token_def = &custom_token_defs[tokendef_index].tokens;
+                    let custom_token_def = &custom_token_defs[tokendef_index];
 
-                    for (tokens, value) in custom_token_def.iter() {
-                        let step_kind = MatchStepCompound {
-                            tokens: tokens
-                                .iter()
-                                .map(|it| MatchStepExact {
-                                    kind: it.0,
-                                    excerpt: it.1.clone(),
-                                })
-                                .collect(),
-                        };
+                    let mut token_matches: HashMap<Vec<MatchStepExact>, ExpressionValue>
+                        = HashMap::new();
 
-                        if let Some(&mut (ref existing_value, ref mut next_step)) =
-                            step.children_compound.get_mut(&step_kind)
-                        {
-                            if existing_value.is_none()
-                                || (existing_value.is_some()
-                                    && existing_value.as_ref().unwrap() != value)
-                            {
-                                return Err(report.error_span(
-                                    "pattern clashes with a previous instruction pattern",
-                                    &rule.pattern_span,
-                                ));
-                            }
-
-                            RulePatternMatcher::build_step(
-                                report.clone(),
-                                next_step,
-                                rule,
-                                &next_parts[1..],
-                                rule_index,
-                                custom_token_defs,
-                            )?;
-                            continue;
-                        }
-
-                        let mut next_step = MatchStep::new();
-                        RulePatternMatcher::build_step(
-                            report.clone(),
-                            &mut next_step,
-                            rule,
-                            &next_parts[1..],
-                            rule_index,
-                            custom_token_defs,
-                        )?;
-                        step.children_compound
-                            .insert(step_kind, (Some(value.clone()), next_step));
+                    for (tokens, value) in custom_token_def.tokens.iter() {
+                        let token_match: Vec<MatchStepExact> = tokens.iter()
+                            .map(|it| MatchStepExact {
+                                kind: it.0,
+                                excerpt: it.1.clone()
+                            })
+                            .collect();
+                        token_matches.insert(token_match, value.clone());
                     }
+
+                    for existing in step.children_compound.iter() {
+                        for (token, value) in existing.0.tokens.iter() {
+                            let existing_value = token_matches.get(token);
+                            if existing_value.is_some() && existing_value != Some(value) {
+                                report.error_build("pattern clashes with a previous instruction pattern")
+                                    .span(span)
+                                    .annotate_note("clashes here", &existing.0.span);
+                                return Err(());
+                            }
+                        }
+                    }
+
+                    let step_kind = MatchStepCompound {
+                        span: span.clone(),
+                        tokens: token_matches,
+                    };
+
+                    let mut next_step = MatchStep::new();
+                    RulePatternMatcher::build_step(
+                        report.clone(),
+                        &mut next_step,
+                        rule,
+                        &next_parts[1..],
+                        rule_index,
+                        custom_token_defs,
+                    )?;
+
+                    step.children_compound.push((step_kind, next_step));
                 } else {
                     let step_kind = MatchStepParameter;
 
@@ -192,7 +220,7 @@ impl RulePatternMatcher {
     pub fn parse_match(&self, parser: &mut Parser) -> Option<Match> {
         let mut exprs = Vec::new();
 
-        match self.parse_match_step(parser, &self.root_step, &mut exprs) {
+        match self.parse_match_step(parser, vec![&self.root_step], &mut exprs) {
             Some(indices) => {
                 let result = Match {
                     rule_indices: indices.iter().cloned().collect(),
@@ -209,12 +237,12 @@ impl RulePatternMatcher {
     fn parse_match_step<'s>(
         &'s self,
         parser: &mut Parser,
-        step: &'s MatchStep,
+        steps: Vec<&'s MatchStep>,
         exprs: &mut Vec<Expression>,
     ) -> Option<&'s [usize]> {
+        let parser_state = parser.save();
         if !parser.next_is_linebreak() {
             // Try to match fixed tokens first, if some rule accepts that.
-            let parser_state = parser.save();
 
             let tk = parser.advance();
 
@@ -223,52 +251,67 @@ impl RulePatternMatcher {
                 excerpt: tk.excerpt.map(|s| s.to_ascii_lowercase()),
             };
 
-            if let Some(ref next_step) = step.children_exact.get(&step_exact) {
-                if let Some(result) = self.parse_match_step(parser, next_step, exprs) {
+            let mut next_steps: Vec<&MatchStep> = Vec::new();
+
+            for step in steps.iter() {
+                if let Some(next_step) = step.children_exact.get(&step_exact) {
+                    next_steps.push(next_step);
+                }
+            }
+            if !next_steps.is_empty() {
+                if let Some(result) = self.parse_match_step(parser, next_steps.clone(), exprs) {
                     return Some(result);
                 }
             }
 
             // Then try to match compound tokens (e.g. #tokendef tokens), if some rule accepts that.
 
-            let mut sorted: Vec<MatchStepCompound> = step
-                .children_compound
-                .iter()
-                .map(|(k, _)| k.clone())
-                .collect();
-            sorted.sort_unstable_by_key(|it| -(it.tokens.len() as isize));
-            let matched_key = sorted.iter().find(|key| {
-                parser.restore(parser_state.clone());
-                key.tokens.iter().all(|key_tk| {
-                    let tk = parser.advance();
-                    let step_exact = MatchStepExact {
-                        kind: tk.kind,
-                        excerpt: tk.excerpt.map(|s| s.to_ascii_lowercase()),
-                    };
-                    &step_exact == key_tk
-                })
-            });
+            let mut match_steps: HashMap<(&Vec<MatchStepExact>, &ExpressionValue), Vec<&MatchStep>>
+                = HashMap::new();
 
-            if let Some(ref key) = matched_key {
-                let &(ref value, ref next_step) = step.children_compound.get(&key).unwrap();
-                if value.is_some() {
-                    exprs.push(value.as_ref().unwrap().make_literal());
+            for step in steps.iter() {
+                for (compound_step, next_step) in step.children_compound.iter() {
+
+                    // search through individual token values
+                    for (token, token_value) in compound_step.tokens.iter() {
+                        parser.restore(parser_state.clone());
+                        if token.iter().all(|key_tk| {
+                            let tk = parser.advance();
+                            key_tk.kind == tk.kind &&
+                                key_tk.excerpt == tk.excerpt.map(|s| s.to_ascii_lowercase())
+                        }) {
+                            match_steps.entry((token, &token_value)).or_insert(Vec::new())
+                                .push(next_step);
+                        }
+                    }
                 }
+            }
 
-                if let Some(result) = self.parse_match_step(parser, next_step, exprs) {
-                    return Some(result);
-                }
+            if !match_steps.is_empty() {
+                let mut sorted_match_steps: Vec<(&(&Vec<MatchStepExact>, &ExpressionValue), &Vec<&MatchStep>)> = match_steps
+                    .iter()
+                    .collect();
+                sorted_match_steps.sort_unstable_by_key(|((it, _), _)| -(it.len() as isize));
 
-                if value.is_some() {
+                for ((token, value), next) in sorted_match_steps {
+                    exprs.push(value.make_literal());
+                    parser.restore(parser_state.clone());
+                    for _ in 0 .. token.len() {
+                        parser.advance();
+                    }
+
+                    if let Some(result) = self.parse_match_step(parser, next.clone(), exprs) {
+                        return Some(result);
+                    }
+
                     exprs.pop();
                 }
             }
 
-            parser.restore(parser_state);
 
             // Then try to match argument expressions, if some rule accepts that.
-            if let Some(next_step) = step.children_param.get(&MatchStepParameter) {
-                let parser_state = parser.save();
+            if steps.iter().any(|step| step.children_param.get(&MatchStepParameter).is_some()) {
+                parser.restore(parser_state.clone());
 
                 let expr = match Expression::parse(parser) {
                     Ok(expr) => expr,
@@ -277,22 +320,30 @@ impl RulePatternMatcher {
 
                 exprs.push(expr);
 
-                if let Some(result) = self.parse_match_step(parser, &next_step, exprs) {
+                for step in steps.iter() {
+                    if let Some(next_step) = step.children_param.get(&MatchStepParameter) {
+                        next_steps.push(next_step);
+                    }
+                }
+
+                if let Some(result) = self.parse_match_step(parser, next_steps.clone(), exprs) {
                     return Some(result);
                 }
 
                 exprs.pop();
-                parser.restore(parser_state);
             }
         }
 
         // Finally, return a match if some rule ends here.
-        if step.rule_indices.len() != 0 {
-            if !parser.next_is_linebreak() {
-                return None;
-            }
+        for step in steps.iter() {
+            parser.restore(parser_state.clone());
+            if step.rule_indices.len() != 0 {
+                if !parser.next_is_linebreak() {
+                    return None;
+                }
 
-            return Some(&step.rule_indices);
+                return Some(&step.rule_indices);
+            }
         }
 
         // Else, return no match.
@@ -330,30 +381,27 @@ impl RulePatternMatcher {
             self.print_debug_inner(&next_step, indent + 1);
         }
 
-        for (key, (value, next_step)) in step.children_compound.iter() {
+        for (compound, next_step) in step.children_compound.iter() {
             for _ in 0..indent {
                 print!("   ");
             }
 
-            let token_strings: Vec<String> = key
-                .tokens
-                .iter()
-                .map(|it| {
-                    it.kind
-                        .printable_excerpt(it.excerpt.as_ref().map(|s| s as &str))
-                })
-                .collect();
+            for (tokens, value) in compound.tokens.iter() {
+                let token_strings: Vec<String> = tokens.iter()
+                    .map(|it| {
+                        it.kind
+                            .printable_excerpt(it.excerpt.as_ref().map(|s| s as &str))
+                    })
+                    .collect();
+                print!("{}", token_strings.join("-"));
 
-            print!("{}", token_strings.join("-"));
-
-            if value.is_some() {
-                match &value.as_ref().unwrap() {
+                match &value {
                     &ExpressionValue::Integer(ref bigint, _) => print!(" (= {})", bigint),
                     _ => unreachable!(),
                 }
-            }
 
-            println!();
+                println!();
+            }
 
             self.print_debug_inner(&next_step, indent + 1);
         }
@@ -374,7 +422,7 @@ impl MatchStep {
         MatchStep {
             rule_indices: Vec::new(),
             children_exact: HashMap::new(),
-            children_compound: HashMap::new(),
+            children_compound: Vec::new(),
             children_param: HashMap::new(),
         }
     }

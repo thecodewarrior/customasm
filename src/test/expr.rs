@@ -5,6 +5,7 @@ use expr::{Expression, ExpressionEvalContext, ExpressionValue};
 use num_bigint::BigInt;
 use syntax::{tokenize, Parser};
 use util::{FileServer, FileServerMock};
+use asm::FunctionManager;
 
 fn test<S>(src: S, expected: ExpectedResult<ExpressionValue>)
 where
@@ -19,6 +20,7 @@ where
         let expr_value = expr.eval(
             report.clone(),
             &mut ExpressionEvalContext::new(),
+            &mut FunctionManager::new(),
             &|_, _, _| Err(false),
             &|_, _, _, _| Err(false),
         )?;

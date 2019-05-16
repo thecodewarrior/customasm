@@ -43,6 +43,7 @@ pub struct ParsedExpression {
 
 impl AssemblerState {
     pub fn new() -> AssemblerState {
+        let _flame_guard = flame::start_guard("create assembler state");
         let mut state = AssemblerState {
             cpudef: None,
             labels: LabelManager::new(),
@@ -81,6 +82,7 @@ impl AssemblerState {
     }
 
     pub fn wrapup(&mut self, report: RcReport) -> Result<(), ()> {
+        let _flame_guard = flame::start_guard("wrapup");
         self.resolve_instrs(report.clone())?;
         self.resolve_exprs(report.clone())?;
         self.check_bank_overlap(report.clone());
@@ -102,6 +104,7 @@ impl AssemblerState {
     }
 
     pub fn get_binary_output(&self) -> BinaryOutput {
+        let _guard = flame::start_guard("get binary output");
         let mut output = BinaryOutput::new();
 
         for block in &self.blocks {
@@ -161,6 +164,7 @@ impl AssemblerState {
     }
 
     pub fn check_bank_overlap(&self, report: RcReport) {
+        let _guard = flame::start_guard("check bank overlap");
         for j in 1..self.bankdefs.len() {
             if self.bankdefs[j].outp.is_none() {
                 continue;
@@ -307,6 +311,7 @@ impl AssemblerState {
     }
 
     pub fn resolve_instrs(&mut self, report: RcReport) -> Result<(), ()> {
+        let _guard = flame::start_guard("resolve instructions");
         use std::mem;
 
         let mut instrs = mem::replace(&mut self.parsed_instrs, Vec::new());
@@ -322,6 +327,7 @@ impl AssemblerState {
     }
 
     pub fn resolve_exprs(&mut self, report: RcReport) -> Result<(), ()> {
+        let _guard = flame::start_guard("resolve expressions");
         use std::mem;
 
         let exprs = mem::replace(&mut self.parsed_exprs, Vec::new());
@@ -341,8 +347,10 @@ impl AssemblerState {
         report: RcReport,
         instr: &mut ParsedInstruction,
     ) -> Result<(), ()> {
+        let _flame_guard = flame::start_guard("output instruction");
         // Resolve remaining arguments.
         for i in 0..instr.exprs.len() {
+            let _guard = flame::start_guard("evaluate argument");
             if instr.args[i].is_none() {
                 instr.args[i] = Some(self.expr_eval(
                     report.clone(),
@@ -386,12 +394,15 @@ impl AssemblerState {
 
         let _guard = report.push_parent("failed to resolve instruction", &instr.span);
 
+        let _evaluate_flame = flame::start_guard("evaluate");
         let value = self.expr_eval(
             report.clone(),
             &instr.ctx,
             &rule.production,
             &mut args_eval_ctx,
         )?;
+        drop(_evaluate_flame);
+
         let value_width = match value {
             ExpressionValue::Integer(_, Some(w)) => w,
             ExpressionValue::Integer(_, None) => panic!("indeterminate value width"),

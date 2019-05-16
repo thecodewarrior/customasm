@@ -49,7 +49,7 @@ pub enum Expression {
     },
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum ExpressionValue {
     Void,
     Integer(BigInt, Option<usize>),

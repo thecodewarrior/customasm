@@ -13,8 +13,8 @@ pub struct Rule {
 
 #[derive(Debug, Eq, PartialEq, Hash)]
 pub enum RulePatternPart {
-    Exact(TokenKind, Option<String>),
-    Parameter(usize),
+    Exact(Span, TokenKind, Option<String>),
+    Parameter(Span, usize),
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
@@ -44,11 +44,11 @@ impl Rule {
     }
 
     pub fn pattern_add_exact(&mut self, token: &Token) {
-        let part = RulePatternPart::Exact(token.kind, token.excerpt.clone());
+        let part = RulePatternPart::Exact(token.span.clone(), token.kind, token.excerpt.clone());
         self.pattern_parts.push(part);
     }
 
-    pub fn pattern_add_param<S>(&mut self, name: S, typ: RuleParameterType)
+    pub fn pattern_add_param<S>(&mut self, span: Span, name: S, typ: RuleParameterType)
     where
         S: Into<String>,
     {
@@ -65,7 +65,7 @@ impl Rule {
 
         self.params.push(param);
 
-        let part = RulePatternPart::Parameter(param_index);
+        let part = RulePatternPart::Parameter(span, param_index);
         self.pattern_parts.push(part);
     }
 

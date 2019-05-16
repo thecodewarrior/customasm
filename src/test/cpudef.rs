@@ -4,6 +4,7 @@ use asm::cpudef::CpuDef;
 use diagn::RcReport;
 use syntax::{tokenize, Parser};
 use util::{FileServer, FileServerMock};
+use AssemblerState;
 
 fn test<S>(src: S, expected: ExpectedResult<()>)
 where
@@ -14,7 +15,8 @@ where
         let tokens = tokenize(report.clone(), "test", &chars)?;
         let mut parser = Parser::new(report.clone(), tokens);
 
-        CpuDef::parse(&mut parser)?;
+        let mut state = AssemblerState::new();
+        CpuDef::parse(&mut parser, &mut state, fileserver, &"".to_string())?;
         Ok(())
     };
 

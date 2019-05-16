@@ -49,6 +49,8 @@ impl CpuDef {
         S: Into<String>,
     {
         let filename_owned = filename.into();
+        let _guard = flame::start_guard(format!("parse {}", filename_owned));
+
         let chars = fileserver.get_chars(report.clone(), &filename_owned, filename_span)?;
         let tokens = tokenize(report.clone(), filename_owned.as_ref(), &chars)?;
 
@@ -108,11 +110,13 @@ impl CpuDef {
 
         cpudef_parser.parse()?;
 
+        let _build_pat_flame = flame::start_guard("build pattern matcher");
         let pattern_matcher = RulePatternMatcher::new(
             report,
             &cpudef_parser.rules,
             &cpudef_parser.custom_token_defs,
         )?;
+        drop(_build_pat_flame);
 
         //println!("[pattern tree for cpudef]");
         //pattern_matcher.print_debug();
@@ -132,13 +136,14 @@ impl CpuDef {
 
 impl<'t> CpuDefParser<'t> {
     fn parse(&mut self) -> Result<(), ()> {
-        self.parse_directives()?;
+        let _guard = flame::start_guard("parse cpudef");
+        flame::span_of("directives", || self.parse_directives())?;
 
         if self.bits.is_none() {
             self.bits = Some(8);
         }
 
-        self.parse_rules()?;
+        flame::span_of("rules", || self.parse_rules())?;
 
         Ok(())
     }
@@ -154,10 +159,12 @@ impl<'t> CpuDefParser<'t> {
     }
 
     fn parse_directive(&mut self) -> Result<(), ()> {
-        let tk_name = self
-            .parser
+        let tk_name = self.parser
             .expect_msg(TokenKind::Identifier, "expected directive name")?;
-        match tk_name.excerpt.as_ref().unwrap().as_ref() {
+        let directive_name = tk_name.excerpt.as_ref().unwrap().as_ref();
+        let _guard = flame::start_guard(format!("directive #{}", directive_name));
+
+        match directive_name {
             "align" => self.parse_directive_align(&tk_name)?,
             "bits" => self.parse_directive_bits(&tk_name)?,
             "labelalign" => self.parse_directive_labelalign(&tk_name)?,
@@ -490,7 +497,7 @@ impl<'t> CpuDefParser<'t> {
             (true, RuleParameterType::Expression)
         };
 
-        rule.pattern_add_param(name, typ);
+        rule.pattern_add_param(tk_name.span.clone(), name, typ);
 
         self.parser.expect(TokenKind::BraceClose)?;
 

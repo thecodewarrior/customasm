@@ -7,6 +7,7 @@ pub struct ExpressionParser<'a> {
 
 impl Expression {
     pub fn parse(parser: &mut Parser) -> Result<Expression, ()> {
+        let _guard = flame::start_guard("parse expression");
         ExpressionParser::new(parser).parse_expr()
     }
 }

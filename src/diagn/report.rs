@@ -4,8 +4,10 @@ use std::io::Write;
 use std::rc::Rc;
 use util::CharCounter;
 use util::FileServer;
+use diagn::report::AnnotationKind::Error;
 
 const C_DEFAULT: &'static str = "\u{1B}[0m";
+const C_INFO: &'static str = "\u{1B}[36m";
 const C_LOCATION: &'static str = "\u{1B}[0m\u{1B}[90m";
 const C_ERROR: &'static str = "\u{1B}[0m\u{1B}[91m";
 const C_WARNING: &'static str = "\u{1B}[0m\u{1B}[93m";
@@ -17,23 +19,54 @@ pub struct Report {
     parents: Vec<Message>,
 }
 
+#[derive(Clone)]
 struct Message {
     pub descr: String,
     pub kind: MessageKind,
     pub span: Option<Span>,
+    pub annotations: Vec<Annotation>,
     pub inner: Option<Box<Message>>,
+}
+
+#[derive(Clone)]
+struct Annotation {
+    pub descr: String,
+    pub kind: AnnotationKind,
+    pub span: Span,
 }
 
 #[derive(Copy, Clone)]
 enum MessageKind {
     Debug,
+    Info,
     Error,
     Warning,
+}
+
+#[derive(Copy, Clone)]
+enum AnnotationKind {
+    Note,
+    Error,
+}
+
+pub struct MessageBuilder {
+    descr: String,
+    kind: MessageKind,
+    span: Option<Span>,
+    annotations: Vec<Annotation>,
 }
 
 #[derive(Clone)]
 pub struct RcReport {
     report: Rc<RefCell<Report>>,
+}
+
+pub struct RcMessageBuilder {
+    descr: String,
+    kind: MessageKind,
+    span: Option<Span>,
+    annotations: Vec<Annotation>,
+    report: RcReport,
 }
 
 pub struct ReportParentGuard {
@@ -54,11 +87,22 @@ impl Report {
                 descr: parent.descr.clone(),
                 kind: parent.kind,
                 span: parent.span.clone(),
+                annotations: parent.annotations.clone(),
                 inner: Some(Box::new(msg)),
             };
         }
 
         self.messages.push(msg);
+    }
+
+    pub fn add(&mut self, builder: MessageBuilder) {
+        self.message(Message {
+            descr: builder.descr,
+            kind: builder.kind,
+            span: None,
+            annotations: builder.annotations,
+            inner: None,
+        })
     }
 
     pub fn debug<S>(&mut self, descr: S)
@@ -69,6 +113,21 @@ impl Report {
             descr: descr.into(),
             kind: MessageKind::Debug,
             span: None,
+            annotations: vec![],
+            inner: None,
+        };
+        self.message(msg);
+    }
+
+    pub fn info<S>(&mut self, descr: S)
+        where
+            S: Into<String>,
+    {
+        let msg = Message {
+            descr: descr.into(),
+            kind: MessageKind::Info,
+            span: None,
+            annotations: vec![],
             inner: None,
         };
         self.message(msg);
@@ -82,6 +141,21 @@ impl Report {
             descr: descr.into(),
             kind: MessageKind::Debug,
             span: Some(span.clone()),
+            annotations: vec![],
+            inner: None,
+        };
+        self.message(msg);
+    }
+
+    pub fn info_span<S>(&mut self, descr: S, span: &Span)
+        where
+            S: Into<String>,
+    {
+        let msg = Message {
+            descr: descr.into(),
+            kind: MessageKind::Info,
+            span: Some(span.clone()),
+            annotations: vec![],
             inner: None,
         };
         self.message(msg);
@@ -95,6 +169,7 @@ impl Report {
             descr: descr.into(),
             kind: MessageKind::Error,
             span: None,
+            annotations: vec![],
             inner: None,
         };
         self.message(msg);
@@ -108,6 +183,7 @@ impl Report {
             descr: descr.into(),
             kind: MessageKind::Error,
             span: Some(span.clone()),
+            annotations: vec![],
             inner: None,
         };
         self.message(msg);
@@ -121,6 +197,7 @@ impl Report {
             descr: descr.into(),
             kind: MessageKind::Warning,
             span: None,
+            annotations: vec![],
             inner: None,
         };
         self.message(msg);
@@ -134,6 +211,7 @@ impl Report {
             descr: descr.into(),
             kind: MessageKind::Warning,
             span: Some(span.clone()),
+            annotations: vec![],
             inner: None,
         };
         self.message(msg);
@@ -147,6 +225,7 @@ impl Report {
             descr: descr.into(),
             kind: MessageKind::Error,
             span: Some(span.clone()),
+            annotations: vec![],
             inner: None,
         };
         self.parents.push(msg);
@@ -251,8 +330,7 @@ impl Report {
                 write!(writer, "{}", highlight_color).unwrap();
                 writeln!(writer, "{}: {}", kind_label, msg.descr).unwrap();
                 write!(writer, "{}", C_DEFAULT).unwrap();
-            }
-
+            },
             Some(ref span) => {
                 match span.location {
                     None => {
@@ -287,7 +365,7 @@ impl Report {
                             line2 + 1,
                             col2 + 1
                         )
-                        .unwrap();
+                            .unwrap();
 
                         self.print_indent(writer, indent);
                         write!(writer, "{}", highlight_color).unwrap();
@@ -298,14 +376,69 @@ impl Report {
                         self.print_msg_src(
                             writer,
                             &counter,
-                            msg.kind.get_color(),
+                            highlight_color,
                             line1,
                             col1,
                             line2,
                             col2,
                             indent,
+                            "^",
+                            &"".to_string()
                         );
                     }
+                }
+            }
+        }
+
+        for annotation in msg.annotations.iter() {
+            let annotation_highlight_color = match annotation.kind {
+                Note => C_INFO,
+                Error => highlight_color
+            };
+            let annotation_kind_label = match annotation.kind {
+                Note => "Note",
+                Error => kind_label
+            };
+
+            match annotation.span.location {
+                None => {
+                    // Print description with filename but without position information.
+                    self.print_indent(writer, indent);
+                    write!(writer, "{}", C_LOCATION).unwrap();
+                    writeln!(writer, "{}:", *annotation.span.file).unwrap();
+                    write!(writer, "{}", highlight_color).unwrap();
+                    writeln!(writer, "{}: {}", kind_label, msg.descr).unwrap();
+                    write!(writer, "{}", C_DEFAULT).unwrap();
+                }
+                Some((start, end)) => {
+                    // Print location information.
+                    let chars = fileserver
+                        .get_chars(RcReport::new(), &*annotation.span.file, None)
+                        .ok()
+                        .unwrap();
+                    let counter = CharCounter::new(&chars);
+
+                    let (line1, col1) = counter.get_line_column_at_index(start);
+                    let (line2, col2) = counter.get_line_column_at_index(end);
+
+                    self.print_indent(writer, indent);
+                    write!(writer, "{}", annotation_highlight_color).unwrap();
+                    writeln!(writer, "{}: {}", annotation_kind_label, msg.descr).unwrap();
+                    write!(writer, "{}", C_DEFAULT).unwrap();
+
+                    // Print annotated source code.
+                    self.print_msg_src(
+                        writer,
+                        &counter,
+                        annotation_highlight_color,
+                        line1,
+                        col1,
+                        line2,
+                        col2,
+                        indent,
+                        annotation.kind.get_character(),
+                        &annotation.descr
+                    );
                 }
             }
         }
@@ -332,6 +465,8 @@ impl Report {
         line2: usize,
         col2: usize,
         indent: usize,
+        character: &str,
+        message: &String
     ) {
         let first_line = if (line1 as isize - 2) < 0 {
             0
@@ -385,11 +520,11 @@ impl Report {
                 for p in 0..(excerpt.len() + 1) {
                     // Print markings for spans of zero characters.
                     if p == col1 && p == col2 && line1 == line2 {
-                        write!(writer, "^").unwrap();
+                        write!(writer, "{}", character).unwrap();
                     }
 
                     let marking = if (line > line1 || p >= col1) && (line < line2 || p < col2) {
-                        "^"
+                        character
                     } else {
                         " "
                     };
@@ -416,6 +551,10 @@ impl RcReport {
         }
     }
 
+    pub fn add(&self, builder: MessageBuilder) {
+        self.report.borrow_mut().add(builder);
+    }
+
     pub fn debug<S>(&self, descr: S)
     where
         S: Into<String>,
@@ -428,6 +567,32 @@ impl RcReport {
         S: Into<String>,
     {
         self.report.borrow_mut().debug_span(descr, span);
+    }
+
+    pub fn debug_build<S>(&self, descr: S) -> RcMessageBuilder
+        where S: Into<String>
+    {
+        RcMessageBuilder::new(descr, MessageKind::Debug, self.clone())
+    }
+
+    pub fn info<S>(&self, descr: S)
+        where
+            S: Into<String>,
+    {
+        self.report.borrow_mut().info(descr);
+    }
+
+    pub fn info_span<S>(&self, descr: S, span: &Span)
+        where
+            S: Into<String>,
+    {
+        self.report.borrow_mut().info_span(descr, span);
+    }
+
+    pub fn info_build<S>(&self, descr: S) -> RcMessageBuilder
+        where S: Into<String>
+    {
+        RcMessageBuilder::new(descr, MessageKind::Info, self.clone())
     }
 
     pub fn error<S>(&self, descr: S)
@@ -444,6 +609,12 @@ impl RcReport {
         self.report.borrow_mut().error_span(descr, span);
     }
 
+    pub fn error_build<S>(&self, descr: S) -> RcMessageBuilder
+        where S: Into<String>
+    {
+        RcMessageBuilder::new(descr, MessageKind::Error, self.clone())
+    }
+
     pub fn warning<S>(&self, descr: S)
     where
         S: Into<String>,
@@ -456,6 +627,12 @@ impl RcReport {
         S: Into<String>,
     {
         self.report.borrow_mut().warning_span(descr, span);
+    }
+
+    pub fn warning_build<S>(&self, descr: S) -> RcMessageBuilder
+        where S: Into<String>
+    {
+        RcMessageBuilder::new(descr, MessageKind::Warning, self.clone())
     }
 
     pub fn push_parent<S>(&self, descr: S, span: &Span) -> ReportParentGuard
@@ -510,6 +687,7 @@ impl MessageKind {
     fn get_label(&self) -> &'static str {
         match self {
             &MessageKind::Debug => "debug",
+            &MessageKind::Info => "info",
             &MessageKind::Error => "error",
             &MessageKind::Warning => "warning",
         }
@@ -518,8 +696,146 @@ impl MessageKind {
     fn get_color(&self) -> &'static str {
         match self {
             &MessageKind::Debug => C_DEFAULT,
+            &MessageKind::Info => C_INFO,
             &MessageKind::Error => C_ERROR,
             &MessageKind::Warning => C_WARNING,
         }
+    }
+}
+
+impl AnnotationKind {
+    fn get_character(&self) -> &'static str {
+        match self {
+            &AnnotationKind::Note => "-",
+            &AnnotationKind::Error => "^",
+        }
+    }
+}
+
+impl MessageBuilder {
+    pub fn debug<S>(descr: S) -> MessageBuilder
+        where
+            S: Into<String>,
+    {
+        MessageBuilder {
+            descr: descr.into(),
+            kind: MessageKind::Debug,
+            span: None,
+            annotations: vec![],
+        }
+    }
+
+    pub fn info<S>(descr: S) -> MessageBuilder
+        where
+            S: Into<String>,
+    {
+        MessageBuilder {
+            descr: descr.into(),
+            kind: MessageKind::Info,
+            span: None,
+            annotations: vec![],
+        }
+    }
+
+    pub fn warning<S>(descr: S) -> MessageBuilder
+        where S: Into<String>,
+    {
+        MessageBuilder {
+            descr: descr.into(),
+            kind: MessageKind::Warning,
+            span: None,
+            annotations: vec![],
+        }
+    }
+
+    pub fn error<S>(descr: S) -> MessageBuilder
+        where
+            S: Into<String>,
+    {
+        MessageBuilder {
+            descr: descr.into(),
+            kind: MessageKind::Error,
+            span: None,
+            annotations: vec![],
+        }
+    }
+
+    pub fn span(mut self, span: &Span) -> Self {
+        self.span = Some(span.clone());
+        self
+    }
+
+    pub fn annotate_note<S>(mut self, descr: S, span: &Span) -> Self
+        where S: Into<String>
+    {
+        self.annotations.push(Annotation {
+            descr: descr.into(),
+            kind: AnnotationKind::Note,
+            span: span.clone(),
+        });
+        self
+    }
+
+    pub fn annotate_error<S>(mut self, descr: S, span: &Span) -> Self
+        where S: Into<String>
+    {
+        self.annotations.push(Annotation {
+            descr: descr.into(),
+            kind: AnnotationKind::Error,
+            span: span.clone(),
+        });
+        self
+    }
+}
+
+
+impl RcMessageBuilder {
+    fn new<S>(descr: S, kind: MessageKind, report: RcReport) -> RcMessageBuilder
+        where
+            S: Into<String>,
+    {
+        RcMessageBuilder {
+            descr: descr.into(),
+            kind,
+            span: None,
+            annotations: vec![],
+            report
+        }
+    }
+
+    pub fn span(mut self, span: &Span) -> Self {
+        self.span = Some(span.clone());
+        self
+    }
+
+    pub fn annotate_note<S>(mut self, descr: S, span: &Span) -> Self
+        where S: Into<String>
+    {
+        self.annotations.push(Annotation {
+            descr: descr.into(),
+            kind: AnnotationKind::Note,
+            span: span.clone(),
+        });
+        self
+    }
+
+    pub fn annotate_error<S>(mut self, descr: S, span: &Span) -> Self
+        where S: Into<String>
+    {
+        self.annotations.push(Annotation {
+            descr: descr.into(),
+            kind: AnnotationKind::Error,
+            span: span.clone(),
+        });
+        self
+    }
+
+    pub fn report(self) {
+        self.report.add(MessageBuilder {
+            descr: self.descr,
+            kind: self.kind,
+            span: self.span,
+            annotations: self.annotations
+        });
     }
 }

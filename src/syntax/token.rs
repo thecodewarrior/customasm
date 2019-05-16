@@ -174,6 +174,7 @@ pub fn tokenize<S>(report: RcReport, src_filename: S, src: &[char]) -> Result<Ve
 where
     S: Into<String>,
 {
+    let _flame_guard = flame::start_guard("tokenize");
     let filename = Rc::new(src_filename.into());
     let mut tokens = Vec::new();
     let mut index = 0;

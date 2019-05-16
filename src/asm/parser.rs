@@ -31,6 +31,8 @@ impl<'a> AssemblerParser<'a> {
         S: Into<String>,
     {
         let filename_owned = filename.into();
+        let _guard = flame::start_guard(format!("parse {}", filename_owned));
+
         let chars = fileserver.get_chars(report.clone(), &filename_owned, filename_span)?;
         let tokens = tokenize(report.clone(), filename_owned.as_ref(), &chars)?;
 
@@ -85,6 +87,7 @@ impl<'a> AssemblerParser<'a> {
 
         let tk_name = self.parser.expect(TokenKind::Identifier)?;
         let name = tk_name.excerpt.clone().unwrap();
+        let _guard = flame::start_guard(format!("directive #{}", name));
 
         if name.chars().next() == Some('d') {
             if let Ok(elem_width) = usize::from_str_radix(&name[1..], 10) {
@@ -516,6 +519,7 @@ impl<'a> AssemblerParser<'a> {
     }
 
     fn parse_instruction(&mut self) -> Result<(), ()> {
+        let _guard = flame::start_guard("parse instruction");
         self.state
             .check_cpudef_active(self.parser.report.clone(), &self.parser.next().span)?;
 
@@ -523,6 +527,7 @@ impl<'a> AssemblerParser<'a> {
 
         // Find matching rule patterns.
         self.parser.clear_linebreak();
+        let _match_pattern_flame = flame::start_guard("match pattern");
         let instr_match = match self
             .state
             .cpudef
@@ -543,6 +548,7 @@ impl<'a> AssemblerParser<'a> {
                 return Ok(());
             }
         };
+        drop(_match_pattern_flame);
 
         let instr_span = instr_span_start.join(&self.parser.prev().span);
 

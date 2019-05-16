@@ -2,7 +2,7 @@ use asm::AssemblerState;
 use asm::BinaryOutput;
 use diagn::RcReport;
 use getopts;
-use std::io::stdout;
+use std::io::{stdout, Read, Write};
 use util::enable_windows_ansi_support;
 use util::FileServer;
 
@@ -94,12 +94,17 @@ fn drive_inner(
     };
 
     let mut filenames = matches.opt_strs("i");
+    let mut flame_name = matches.opt_str("flame");
+
     for filename in matches.free {
         filenames.push(filename);
     }
 
+    let _assemble_flame = flame::start_guard("assemble");
     let assembled = assemble(report.clone(), fileserver, &filenames, quiet).map_err(|_| false)?;
+    drop(_assemble_flame);
 
+    let _format_output_flame = flame::start_guard("format output");
     let output_data = match out_format {
         OutputFormat::BinStr => assembled
             .generate_binstr(0, assembled.len())
@@ -119,7 +124,9 @@ fn drive_inner(
             .collect::<Vec<u8>>(),
         OutputFormat::Binary => assembled.generate_binary(0, assembled.len()),
     };
+    drop(_format_output_flame);
 
+    let _write_output_flame = flame::start_guard("write output");
     if out_stdout {
         if !quiet {
             println!("success");
@@ -128,10 +135,36 @@ fn drive_inner(
 
         println!("{}", String::from_utf8_lossy(&output_data));
     } else {
-        println!("writing `{}`...", &output_file);
+        print!("writing `{}`...", &output_file);
+        std::io::stdout().flush();
         fileserver
             .write_bytes(report.clone(), &output_file, &output_data, None)
             .map_err(|_| false)?;
+
+        if !quiet {
+            println!("success");
+        }
+    }
+    drop(_write_output_flame);
+
+    if let Some(filename) = flame_name {
+        use std::fs::File;
+        print!("writing flame `{}`...", &filename);
+        std::io::stdout().flush();
+
+        let mut file = File::create(&filename).unwrap();
+        if filename.to_lowercase().ends_with("html") {
+            flame::dump_html(&mut file).unwrap();
+            let mut buf = String::new();
+            file.read_to_string(&mut buf);
+            buf = buf.replace("var width = document.body.offsetWidth;", "var width = document.body.offsetWidth - 20;");
+            buf = buf.replace("padding: 0;", "padding: 0 10;");
+            file.write(buf.as_bytes()).map_err(|_| ());
+        } else if filename.to_lowercase().ends_with("json") {
+            flame::dump_json(&mut file).unwrap();
+        } else {
+            flame::dump_text_to_writer(&mut file).unwrap();
+        }
 
         if !quiet {
             println!("success");
@@ -160,6 +193,12 @@ fn make_opts() -> getopts::Options {
         "p",
         "print",
         "Print output to stdout instead of writing to a file.",
+    );
+    opts.optopt(
+        "",
+        "flame",
+        "The output flame graph. Can export .json, .html, or text (any other extension)",
+        "FLAME",
     );
     opts.optflag("q", "quiet", "Suppress progress reports.");
     opts.optflag("v", "version", "Display version information.");
