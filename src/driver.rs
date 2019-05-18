@@ -93,6 +93,8 @@ fn drive_inner(
         },
     };
 
+    let debug_file = matches.opt_str("d");
+
     let mut filenames = matches.opt_strs("i");
     let mut flame_name = matches.opt_str("flame");
 
@@ -103,26 +105,29 @@ fn drive_inner(
     let _assemble_flame = flame::start_guard("assemble");
     let assembled = assemble(report.clone(), fileserver, &filenames, quiet).map_err(|_| false)?;
     drop(_assemble_flame);
+    let _assemble_binary_flame = flame::start_guard("assemble binary");
+    let assembled_binary = assembled.get_binary_output();
+    drop(_assemble_binary_flame);
 
     let _format_output_flame = flame::start_guard("format output");
     let output_data = match out_format {
-        OutputFormat::BinStr => assembled
-            .generate_binstr(0, assembled.len())
+        OutputFormat::BinStr => assembled_binary
+            .generate_binstr(0, assembled_binary.len())
             .bytes()
             .collect::<Vec<u8>>(),
-        OutputFormat::BinDump => assembled
-            .generate_bindump(0, assembled.len())
+        OutputFormat::BinDump => assembled_binary
+            .generate_bindump(0, assembled_binary.len())
             .bytes()
             .collect::<Vec<u8>>(),
-        OutputFormat::HexStr => assembled
-            .generate_hexstr(0, assembled.len())
+        OutputFormat::HexStr => assembled_binary
+            .generate_hexstr(0, assembled_binary.len())
             .bytes()
             .collect::<Vec<u8>>(),
-        OutputFormat::HexDump => assembled
-            .generate_hexdump(0, assembled.len())
+        OutputFormat::HexDump => assembled_binary
+            .generate_hexdump(0, assembled_binary.len())
             .bytes()
             .collect::<Vec<u8>>(),
-        OutputFormat::Binary => assembled.generate_binary(0, assembled.len()),
+        OutputFormat::Binary => assembled_binary.generate_binary(0, assembled_binary.len()),
     };
     drop(_format_output_flame);
 
@@ -130,13 +135,14 @@ fn drive_inner(
     if out_stdout {
         if !quiet {
             println!("success");
-            println!("");
+            println!();
         }
 
         println!("{}", String::from_utf8_lossy(&output_data));
     } else {
         print!("writing `{}`...", &output_file);
         std::io::stdout().flush();
+
         fileserver
             .write_bytes(report.clone(), &output_file, &output_data, None)
             .map_err(|_| false)?;
@@ -146,6 +152,28 @@ fn drive_inner(
         }
     }
     drop(_write_output_flame);
+
+    if let Some(debug_file) = debug_file {
+        let _write_debug_flame = flame::start_guard("write debug");
+        print!("writing debug `{}`...", &debug_file);
+        std::io::stdout().flush();
+
+        let mut assembled_debug = assembled.get_debug_output();
+
+        let debug_data = assembled_debug
+            .generate_str(4, 4, &assembled_binary, fileserver)
+            .bytes()
+            .collect::<Vec<u8>>();
+
+        fileserver
+            .write_bytes(report.clone(), &debug_file, &debug_data, None)
+            .map_err(|_| false)?;
+
+        if !quiet {
+            println!("success");
+        }
+        drop(_write_debug_flame);
+    }
 
     if let Some(filename) = flame_name {
         use std::fs::File;
@@ -181,6 +209,12 @@ fn make_opts() -> getopts::Options {
         "format",
         "The format of the output file. Possible formats: binary, binstr, hexstr, bindump, hexdump",
         "FORMAT",
+    );
+    opts.optopt(
+        "d",
+        "debug",
+        "Output a debug file with address -> line mappings",
+        "FILE",
     );
     opts.optmulti(
         "i",
@@ -259,7 +293,7 @@ pub fn assemble(
     fileserver: &FileServer,
     filenames: &[String],
     quiet: bool,
-) -> Result<BinaryOutput, ()> {
+) -> Result<AssemblerState, ()> {
     if !quiet {
         print_header();
     }
@@ -277,5 +311,5 @@ pub fn assemble(
     }
 
     asm.wrapup(report)?;
-    Ok(asm.get_binary_output())
+    Ok(asm)
 }

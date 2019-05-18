@@ -174,6 +174,7 @@ impl<'a> AssemblerParser<'a> {
 
         self.state.bankdefs.push(bankdef);
         self.state.blocks.push(BinaryBlock::new(bankname));
+        self.state.debug_items.push(Vec::new());
         self.state.cur_bank = self.state.bankdefs.len() - 1;
         self.state.cur_block = self.state.bankdefs.len() - 1;
         Ok(())
@@ -400,6 +401,8 @@ impl<'a> AssemblerParser<'a> {
             let expr = Expression::parse(&mut self.parser)?;
             let span = expr.span();
 
+            self.state.add_debug(ctx.clone(), span.clone(), elem_width);
+
             let parsed_expr = ParsedExpression {
                 ctx: ctx,
                 width: elem_width,
@@ -414,6 +417,7 @@ impl<'a> AssemblerParser<'a> {
             if self.parser.maybe_expect(TokenKind::Comma).is_none() {
                 break;
             }
+
         }
 
         Ok(())
@@ -456,11 +460,11 @@ impl<'a> AssemblerParser<'a> {
     }
 
     fn parse_label(&mut self) -> Result<(), ()> {
-        let is_local = self.parser.maybe_expect(TokenKind::Dot).is_some();
-        let mut name = if is_local { "." } else { "" }.to_string();
+        let is_local = self.parser.maybe_expect(TokenKind::Dot);
+        let mut name = if is_local.is_some() { "." } else { "" }.to_string();
 
         let tk_name = self.parser.expect(TokenKind::Identifier)?;
-        name.push_str(&tk_name.excerpt.unwrap());
+        name.push_str(&tk_name.clone().excerpt.unwrap());
 
         let ctx = self.state.get_cur_context();
 
@@ -475,7 +479,8 @@ impl<'a> AssemblerParser<'a> {
             self.parser.expect_linebreak()?;
             value
         } else {
-            self.parser.expect(TokenKind::Colon)?;
+            let start = is_local.as_ref().unwrap_or_else(|| &tk_name);
+            let end = self.parser.expect(TokenKind::Colon)?;
 
             self.state
                 .check_cpudef_active(self.parser.report.clone(), &tk_name.span)?;
@@ -492,10 +497,11 @@ impl<'a> AssemblerParser<'a> {
             let addr = self
                 .state
                 .get_cur_address(self.parser.report.clone(), &tk_name.span)?;
+            self.state.add_debug(ctx.clone(), start.span.join(&end.span), 0);
             ExpressionValue::Integer(BigInt::from(addr), None)
         };
 
-        if is_local {
+        if is_local.is_some() {
             if self.state.labels.local_exists(ctx.label_ctx, &name) {
                 return Err(self
                     .parser

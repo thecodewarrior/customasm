@@ -2,6 +2,7 @@ mod assembler;
 mod bankdef;
 mod binary_block;
 mod binary_output;
+mod debug_output;
 mod function;
 mod label;
 mod parser;

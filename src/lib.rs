@@ -3,6 +3,7 @@ extern crate num_bigint;
 extern crate num_integer;
 extern crate num_traits;
 extern crate flame;
+extern crate core;
 
 mod asm;
 mod diagn;

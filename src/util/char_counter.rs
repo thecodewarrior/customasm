@@ -1,10 +1,10 @@
-pub struct CharCounter<'s> {
-    chars: &'s [char],
+pub struct CharCounter {
+    chars: Vec<char>,
 }
 
-impl<'s> CharCounter<'s> {
-    pub fn new(chars: &'s [char]) -> CharCounter<'s> {
-        CharCounter { chars: chars }
+impl CharCounter {
+    pub fn new(chars: Vec<char>) -> CharCounter {
+        CharCounter { chars }
     }
 
     pub fn get_excerpt(&self, start: usize, end: usize) -> &[char] {
@@ -14,7 +14,7 @@ impl<'s> CharCounter<'s> {
     pub fn get_line_count(&self) -> usize {
         let mut lines = 1;
 
-        for &c in self.chars {
+        for &c in &self.chars {
             if c == '\n' {
                 lines += 1;
             }

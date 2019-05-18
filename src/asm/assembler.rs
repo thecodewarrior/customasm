@@ -6,6 +6,7 @@ use diagn::{RcReport, Span};
 use expr::{Expression, ExpressionEvalContext, ExpressionValue};
 use num_bigint::ToBigInt;
 use util::FileServer;
+use asm::debug_output::DebugOutput;
 
 pub struct AssemblerState {
     pub cpudef: Option<CpuDef>,
@@ -16,10 +17,12 @@ pub struct AssemblerState {
 
     pub bankdefs: Vec<BankDef>,
     pub blocks: Vec<BinaryBlock>,
+    pub debug_items: Vec<Vec<DebugItem>>,
     pub cur_bank: usize,
     pub cur_block: usize,
 }
 
+#[derive(Clone)]
 pub struct ExpressionContext {
     pub block: usize,
     pub offset: usize,
@@ -41,6 +44,12 @@ pub struct ParsedExpression {
     pub expr: Expression,
 }
 
+pub struct DebugItem {
+    ctx: ExpressionContext,
+    span: Span,
+    width: usize,
+}
+
 impl AssemblerState {
     pub fn new() -> AssemblerState {
         let _flame_guard = flame::start_guard("create assembler state");
@@ -53,6 +62,7 @@ impl AssemblerState {
 
             bankdefs: Vec::new(),
             blocks: Vec::new(),
+            debug_items: Vec::new(),
             cur_bank: 0,
             cur_block: 0,
         };
@@ -61,6 +71,7 @@ impl AssemblerState {
             .bankdefs
             .push(BankDef::new("", 0, 0, Some(0), false, None));
         state.blocks.push(BinaryBlock::new(""));
+        state.debug_items.push(Vec::new());
         state
     }
 
@@ -126,6 +137,30 @@ impl AssemblerState {
                     for i in block.len()..(bankdef.size * bits) {
                         output.write(output_index * bits + i, false);
                     }
+                }
+            }
+        }
+
+        output
+    }
+
+    pub fn get_debug_output(&self) -> DebugOutput {
+        let _guard = flame::start_guard("get debug output");
+        let mut output = DebugOutput::new();
+
+        for block in &self.blocks {
+            let bankdef_index = self.find_bankdef(&block.bank_name).unwrap();
+            let bankdef = &self.bankdefs[bankdef_index];
+
+            let bits = if bankdef_index == 0 {
+                1
+            } else {
+                self.cpudef.as_ref().unwrap().bits
+            };
+
+            if let Some(output_index) = bankdef.outp {
+                for item in &self.debug_items[bankdef_index] {
+                    output.add(output_index * bits + item.ctx.offset, item.width, item.span.clone());
                 }
             }
         }
@@ -361,90 +396,97 @@ impl AssemblerState {
             }
         }
 
-        // Check rule constraints.
-        let rule = &self.cpudef.as_ref().unwrap().rules[instr.rule_index];
-        let mut args_eval_ctx = ExpressionEvalContext::new();
-        for i in 0..instr.args.len() {
-            args_eval_ctx.set_local(rule.params[i].name.clone(), instr.args[i].clone().unwrap());
-        }
+        let value_width: usize;
+        let value: ExpressionValue;
+        {
+            // Check rule constraints.
+            let rule = &self.cpudef.as_ref().unwrap().rules[instr.rule_index];
+            let mut args_eval_ctx = ExpressionEvalContext::new();
+            for i in 0..instr.args.len() {
+                args_eval_ctx.set_local(rule.params[i].name.clone(), instr.args[i].clone().unwrap());
+            }
 
-        // Set up local variables
-        let word_size = &self.cpudef.as_ref().unwrap().bits;
-        let insn_start_pc = match instr.ctx.get_address_at(report.clone(), self, &instr.span) {
-            Ok(value) => value.to_bigint().unwrap(),
-            Err(_) => return Err(()),
-        };
-        args_eval_ctx.set_local(
-            "_insn_start",
-            ExpressionValue::Integer(insn_start_pc.clone(), None),
-        );
-
-        if let Some(width) = rule.width {
-            let instr_width = width / word_size;
-
+            // Set up local variables
+            let word_size = &self.cpudef.as_ref().unwrap().bits;
+            let insn_start_pc = match instr.ctx.get_address_at(report.clone(), self, &instr.span) {
+                Ok(value) => value.to_bigint().unwrap(),
+                Err(_) => return Err(()),
+            };
             args_eval_ctx.set_local(
-                "_insn_end",
-                ExpressionValue::Integer(insn_start_pc.clone() + instr_width, None),
+                "_insn_start",
+                ExpressionValue::Integer(insn_start_pc.clone(), None),
             );
-            args_eval_ctx.set_local(
-                "_insn_width",
-                ExpressionValue::Integer(instr_width.to_bigint().unwrap(), None),
-            );
-        }
 
-        let _guard = report.push_parent("failed to resolve instruction", &instr.span);
+            if let Some(width) = rule.width {
+                let instr_width = width / word_size;
 
-        let _evaluate_flame = flame::start_guard("evaluate");
-        let value = self.expr_eval(
-            report.clone(),
-            &instr.ctx,
-            &rule.production,
-            &mut args_eval_ctx,
-        )?;
-        drop(_evaluate_flame);
+                args_eval_ctx.set_local(
+                    "_insn_end",
+                    ExpressionValue::Integer(insn_start_pc.clone() + instr_width, None),
+                );
+                args_eval_ctx.set_local(
+                    "_insn_width",
+                    ExpressionValue::Integer(instr_width.to_bigint().unwrap(), None),
+                );
+            }
 
-        let value_width = match value {
-            ExpressionValue::Integer(_, Some(w)) => w,
-            ExpressionValue::Integer(_, None) => panic!("indeterminate value width"),
-            _ => panic!("not an integer result")
-        };
+            let _guard = report.push_parent("failed to resolve instruction", &instr.span);
 
-        if let Some(w) = rule.width {
-            if w != value_width {
-                report.error_span(format!("predicted and actual width disagree ({}, and {} bits respectively)", w, value_width), &rule.production.returned_value_span());
-                return Err(())
+            let _evaluate_flame = flame::start_guard("evaluate");
+            value = self.expr_eval(
+                report.clone(),
+                &instr.ctx,
+                &rule.production,
+                &mut args_eval_ctx,
+            )?;
+            drop(_evaluate_flame);
+
+            value_width = match value {
+                ExpressionValue::Integer(_, Some(w)) => w,
+                ExpressionValue::Integer(_, None) => panic!("indeterminate value width"),
+                _ => panic!("not an integer result")
+            };
+
+            if let Some(w) = rule.width {
+                if w != value_width {
+                    report.error_span(format!("predicted and actual width disagree ({}, and {} bits respectively)", w, value_width), &rule.production.returned_value_span());
+                    return Err(())
+                }
+            }
+
+            if value_width % word_size != 0 {
+                report.debug_span(
+                    format!("\n{}", rule.production.tree(&self.functions)),
+                    &rule.production.span(),
+                );
+                report.error_span(
+                    format!(
+                        "value width (= {}) is not a multiple of the CPU's byte width (= {})",
+                        value_width,
+                        word_size
+                    ),
+                    &rule.production.returned_value_span(),
+                );
+                return Err(());
+            }
+
+            if instr.result_width.is_some() && value_width != instr.result_width.unwrap() {
+                report.error_span(
+                    format!(
+                        "value width (= {}) is not equal to previously emitted value width (= {}). \
+                    Maybe the width changed while filling in future labels?",
+                        value_width,
+                        instr.result_width.unwrap()
+                    ),
+                    &rule.production.returned_value_span(),
+                );
+                return Err(());
             }
         }
 
-        if value_width % word_size != 0 {
-            report.debug_span(
-                format!("\n{}", rule.production.tree(&self.functions)),
-                &rule.production.span(),
-            );
-            report.error_span(
-                format!(
-                    "value width (= {}) is not a multiple of the CPU's byte width (= {})",
-                    value_width,
-                    word_size
-                ),
-                &rule.production.returned_value_span(),
-            );
-            return Err(());
-        }
+        let ctx = self.get_cur_context();
 
-        if instr.result_width.is_some() && value_width != instr.result_width.unwrap() {
-            report.error_span(
-                format!(
-                    "value width (= {}) is not equal to previously emitted value width (= {}). \
-                    Maybe the width changed while filling in future labels?",
-                    value_width,
-                    instr.result_width.unwrap()
-                ),
-                &rule.production.returned_value_span(),
-            );
-            return Err(());
-        }
-
+        self.add_debug(ctx, instr.span.clone(), value_width);
         let block = &mut self.blocks[instr.ctx.block];
 
         for i in 0..value_width {
@@ -455,6 +497,14 @@ impl AssemblerState {
         instr.result_width = Some(value_width);
 
         Ok(())
+    }
+
+    pub fn add_debug(&mut self, ctx: ExpressionContext, span: Span, width: usize) {
+        self.debug_items[ctx.block].push(DebugItem {
+            ctx,
+            span,
+            width
+        });
     }
 
     pub fn output_parsed_expr(

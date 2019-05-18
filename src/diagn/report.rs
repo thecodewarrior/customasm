@@ -298,11 +298,12 @@ impl Report {
 
         let location = span.location.unwrap();
 
-        let chars = fileserver
-            .get_chars(RcReport::new(), &*span.file, None)
-            .ok()
-            .unwrap();
-        let counter = CharCounter::new(&chars);
+        let counter = CharCounter::new(
+            fileserver
+                .get_chars(RcReport::new(), &*span.file, None)
+                .ok()
+                .unwrap()
+        );
 
         let (span_line, _) = counter.get_line_column_at_index(location.0);
 
@@ -345,11 +346,12 @@ impl Report {
 
                     Some((start, end)) => {
                         // Print location information.
-                        let chars = fileserver
-                            .get_chars(RcReport::new(), &*span.file, None)
-                            .ok()
-                            .unwrap();
-                        let counter = CharCounter::new(&chars);
+                        let counter = CharCounter::new(
+                            fileserver
+                                .get_chars(RcReport::new(), &*span.file, None)
+                                .ok()
+                                .unwrap()
+                        );
 
                         let (line1, col1) = counter.get_line_column_at_index(start);
                         let (line2, col2) = counter.get_line_column_at_index(end);
@@ -412,11 +414,12 @@ impl Report {
                 }
                 Some((start, end)) => {
                     // Print location information.
-                    let chars = fileserver
-                        .get_chars(RcReport::new(), &*annotation.span.file, None)
-                        .ok()
-                        .unwrap();
-                    let counter = CharCounter::new(&chars);
+                    let counter = CharCounter::new(
+                        fileserver
+                            .get_chars(RcReport::new(), &*annotation.span.file, None)
+                            .ok()
+                            .unwrap()
+                    );
 
                     let (line1, col1) = counter.get_line_column_at_index(start);
                     let (line2, col2) = counter.get_line_column_at_index(end);
