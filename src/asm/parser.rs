@@ -529,12 +529,12 @@ impl<'a> AssemblerParser<'a> {
         self.state
             .check_cpudef_active(self.parser.report.clone(), &self.parser.next().span)?;
 
-        let instr_span_start = self.parser.next().span;
+        let insn_span_start = self.parser.next().span;
 
         // Find matching rule patterns.
         self.parser.clear_linebreak();
         let _match_pattern_flame = flame::start_guard("match pattern");
-        let instr_match = match self
+        let insn_match = match self
             .state
             .cpudef
             .as_ref()
@@ -546,24 +546,24 @@ impl<'a> AssemblerParser<'a> {
             None => {
                 // Just skip instruction and continue parsing ahead.
                 self.parser.skip_until_linebreak();
-                let instr_span = instr_span_start.join(&self.parser.prev().span);
+                let insn_span = insn_span_start.join(&self.parser.prev().span);
 
                 self.parser
                     .report
-                    .error_span("no match for instruction found", &instr_span);
+                    .error_span("no match for instruction found", &insn_span);
                 return Ok(());
             }
         };
         drop(_match_pattern_flame);
 
-        let instr_span = instr_span_start.join(&self.parser.prev().span);
+        let insn_span = insn_span_start.join(&self.parser.prev().span);
 
         let ctx = self.state.get_cur_context();
 
         // Resolve as many arguments as possible right now.
         let mut args: Vec<Option<ExpressionValue>> = Vec::new();
 
-        for expr in &instr_match.exprs {
+        for expr in &insn_match.exprs {
             // Use a dummy report to not propagate errors now.
             args.push(
                 self.state
@@ -579,27 +579,27 @@ impl<'a> AssemblerParser<'a> {
 
         // If some argument could not be resolved, save instruction for resolving on the second pass.
         if args.iter().any(|a| a.is_none()) {
-            let rule_index = *instr_match.rule_indices.last().unwrap();
+            let rule_index = *insn_match.rule_indices.last().unwrap();
 
             let placeholder_args: Vec<Option<ExpressionValue>> = args.iter().map(|it|
                 Some(it.clone().unwrap_or(ExpressionValue::Integer(0.to_bigint().unwrap(), None)))
             ).collect();
 
-            let mut parsed_instr = ParsedInstruction {
+            let mut parsed_insn = ParsedInstruction {
                 rule_index: rule_index,
-                span: instr_span.clone(),
+                span: insn_span.clone(),
                 ctx: ctx,
-                exprs: instr_match.exprs,
+                exprs: insn_match.exprs,
                 args: placeholder_args,
                 result_width: None,
             };
 
             let value = self.state
-                .output_parsed_instr(self.parser.report.clone(), &mut parsed_instr);
+                .output_parsed_insn(self.parser.report.clone(), &mut parsed_insn);
 
-            parsed_instr.args = args;
+            parsed_insn.args = args;
 
-            self.state.parsed_instrs.push(parsed_instr);
+            self.state.parsed_insns.push(parsed_insn);
 
             value
         }
@@ -607,11 +607,11 @@ impl<'a> AssemblerParser<'a> {
         else {
             // Apply cascading to find best suited match.
             let mut best_match = 0;
-            while best_match < instr_match.rule_indices.len() - 1 {
+            while best_match < insn_match.rule_indices.len() - 1 {
                 // Evaluate the instruction's production and check whether it
                 // generates an error, in which case, just try the next instruction in the series.
                 let rule = &self.state.cpudef.as_ref().unwrap().rules
-                    [instr_match.rule_indices[best_match]];
+                    [insn_match.rule_indices[best_match]];
 
                 let mut args_eval_ctx = ExpressionEvalContext::new();
                 for i in 0..args.len() {
@@ -629,17 +629,17 @@ impl<'a> AssemblerParser<'a> {
                 best_match += 1;
             }
 
-            let mut parsed_instr = ParsedInstruction {
-                rule_index: instr_match.rule_indices[best_match],
-                span: instr_span,
+            let mut parsed_insn = ParsedInstruction {
+                rule_index: insn_match.rule_indices[best_match],
+                span: insn_span,
                 ctx: ctx,
-                exprs: instr_match.exprs,
+                exprs: insn_match.exprs,
                 args: args,
                 result_width: None,
             };
 
             self.state
-                .output_parsed_instr(self.parser.report.clone(), &mut parsed_instr)
+                .output_parsed_insn(self.parser.report.clone(), &mut parsed_insn)
         }
     }
 

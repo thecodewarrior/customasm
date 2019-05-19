@@ -12,7 +12,7 @@ pub struct AssemblerState {
     pub cpudef: Option<CpuDef>,
     pub labels: LabelManager,
     pub functions: FunctionManager,
-    pub parsed_instrs: Vec<ParsedInstruction>,
+    pub parsed_insns: Vec<ParsedInstruction>,
     pub parsed_exprs: Vec<ParsedExpression>,
 
     pub bankdefs: Vec<BankDef>,
@@ -57,7 +57,7 @@ impl AssemblerState {
             cpudef: None,
             labels: LabelManager::new(),
             functions: FunctionManager::new(),
-            parsed_instrs: Vec::new(),
+            parsed_insns: Vec::new(),
             parsed_exprs: Vec::new(),
 
             bankdefs: Vec::new(),
@@ -94,7 +94,7 @@ impl AssemblerState {
 
     pub fn wrapup(&mut self, report: RcReport) -> Result<(), ()> {
         let _flame_guard = flame::start_guard("wrapup");
-        self.resolve_instrs(report.clone())?;
+        self.resolve_insns(report.clone())?;
         self.resolve_exprs(report.clone())?;
         self.check_bank_overlap(report.clone());
 
@@ -345,18 +345,18 @@ impl AssemblerState {
         Ok(())
     }
 
-    pub fn resolve_instrs(&mut self, report: RcReport) -> Result<(), ()> {
+    pub fn resolve_insns(&mut self, report: RcReport) -> Result<(), ()> {
         let _guard = flame::start_guard("resolve instructions");
         use std::mem;
 
-        let mut instrs = mem::replace(&mut self.parsed_instrs, Vec::new());
+        let mut insns = mem::replace(&mut self.parsed_insns, Vec::new());
 
-        for mut instr in &mut instrs {
+        for mut insn in &mut insns {
             // Errors go to the report.
-            let _ = self.output_parsed_instr(report.clone(), &mut instr);
+            let _ = self.output_parsed_insn(report.clone(), &mut insn);
         }
 
-        mem::replace(&mut self.parsed_instrs, instrs);
+        mem::replace(&mut self.parsed_insns, insns);
 
         Ok(())
     }
@@ -377,20 +377,20 @@ impl AssemblerState {
         Ok(())
     }
 
-    pub fn output_parsed_instr(
+    pub fn output_parsed_insn(
         &mut self,
         report: RcReport,
-        instr: &mut ParsedInstruction,
+        insn: &mut ParsedInstruction,
     ) -> Result<(), ()> {
         let _flame_guard = flame::start_guard("output instruction");
         // Resolve remaining arguments.
-        for i in 0..instr.exprs.len() {
+        for i in 0..insn.exprs.len() {
             let _guard = flame::start_guard("evaluate argument");
-            if instr.args[i].is_none() {
-                instr.args[i] = Some(self.expr_eval(
+            if insn.args[i].is_none() {
+                insn.args[i] = Some(self.expr_eval(
                     report.clone(),
-                    &instr.ctx,
-                    &instr.exprs[i],
+                    &insn.ctx,
+                    &insn.exprs[i],
                     &mut ExpressionEvalContext::new(),
                 )?);
             }
@@ -400,15 +400,15 @@ impl AssemblerState {
         let value: ExpressionValue;
         {
             // Check rule constraints.
-            let rule = &self.cpudef.as_ref().unwrap().rules[instr.rule_index];
+            let rule = &self.cpudef.as_ref().unwrap().rules[insn.rule_index];
             let mut args_eval_ctx = ExpressionEvalContext::new();
-            for i in 0..instr.args.len() {
-                args_eval_ctx.set_local(rule.params[i].name.clone(), instr.args[i].clone().unwrap());
+            for i in 0..insn.args.len() {
+                args_eval_ctx.set_local(rule.params[i].name.clone(), insn.args[i].clone().unwrap());
             }
 
             // Set up local variables
             let word_size = &self.cpudef.as_ref().unwrap().bits;
-            let insn_start_pc = match instr.ctx.get_address_at(report.clone(), self, &instr.span) {
+            let insn_start_pc = match insn.ctx.get_address_at(report.clone(), self, &insn.span) {
                 Ok(value) => value.to_bigint().unwrap(),
                 Err(_) => return Err(()),
             };
@@ -418,24 +418,24 @@ impl AssemblerState {
             );
 
             if let Some(width) = rule.width {
-                let instr_width = width / word_size;
+                let insn_width = width / word_size;
 
                 args_eval_ctx.set_local(
                     "_insn_end",
-                    ExpressionValue::Integer(insn_start_pc.clone() + instr_width, None),
+                    ExpressionValue::Integer(insn_start_pc.clone() + insn_width, None),
                 );
                 args_eval_ctx.set_local(
                     "_insn_width",
-                    ExpressionValue::Integer(instr_width.to_bigint().unwrap(), None),
+                    ExpressionValue::Integer(insn_width.to_bigint().unwrap(), None),
                 );
             }
 
-            let _guard = report.push_parent("failed to resolve instruction", &instr.span);
+            let _guard = report.push_parent("failed to resolve instruction", &insn.span);
 
             let _evaluate_flame = flame::start_guard("evaluate");
             value = self.expr_eval(
                 report.clone(),
-                &instr.ctx,
+                &insn.ctx,
                 &rule.production,
                 &mut args_eval_ctx,
             )?;
@@ -470,13 +470,13 @@ impl AssemblerState {
                 return Err(());
             }
 
-            if instr.result_width.is_some() && value_width != instr.result_width.unwrap() {
+            if insn.result_width.is_some() && value_width != insn.result_width.unwrap() {
                 report.error_span(
                     format!(
                         "value width (= {}) is not equal to previously emitted value width (= {}). \
                     Maybe the width changed while filling in future labels?",
                         value_width,
-                        instr.result_width.unwrap()
+                        insn.result_width.unwrap()
                     ),
                     &rule.production.returned_value_span(),
                 );
@@ -486,15 +486,15 @@ impl AssemblerState {
 
         let ctx = self.get_cur_context();
 
-        self.add_debug(ctx, instr.span.clone(), value_width);
-        let block = &mut self.blocks[instr.ctx.block];
+        self.add_debug(ctx, insn.span.clone(), value_width);
+        let block = &mut self.blocks[insn.ctx.block];
 
         for i in 0..value_width {
             let bit = value.get_bit(value_width - 1 - i);
-            block.write(instr.ctx.offset + i, bit);
+            block.write(insn.ctx.offset + i, bit);
         }
 
-        instr.result_width = Some(value_width);
+        insn.result_width = Some(value_width);
 
         Ok(())
     }
