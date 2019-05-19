@@ -4,7 +4,7 @@ use super::ExpressionValue;
 use super::UnaryOp;
 use asm::FunctionManager;
 use diagn::{RcReport, Span};
-use num_bigint::BigInt;
+use num_bigint::{BigInt, BigUint};
 use num_bigint::Sign;
 use num_traits::One;
 use num_traits::ToPrimitive;
@@ -76,7 +76,7 @@ impl Expression {
             } => match expr.eval(report.clone(), ctx, functions, eval_var, eval_fn)? {
                 ExpressionValue::Integer(x, _) => match op {
                     UnaryOp::Neg => Ok(ExpressionValue::Integer(-x, None)),
-                    UnaryOp::Not => Ok(ExpressionValue::Integer(bigint_not(x), None)),
+                    UnaryOp::Not => Ok(ExpressionValue::Integer(!x, None)),
                 },
 
                 ExpressionValue::Bool(b) => match op {
@@ -176,9 +176,9 @@ impl Expression {
                                     )),
                                 },
 
-                                BinaryOp::And => Ok(ExpressionValue::Integer(bigint_and(lhs, rhs), None)),
-                                BinaryOp::Or => Ok(ExpressionValue::Integer(bigint_or(lhs, rhs), None)),
-                                BinaryOp::Xor => Ok(ExpressionValue::Integer(bigint_xor(lhs, rhs), None)),
+                                BinaryOp::And => Ok(ExpressionValue::Integer(lhs & rhs, None)),
+                                BinaryOp::Or => Ok(ExpressionValue::Integer(lhs | rhs, None)),
+                                BinaryOp::Xor => Ok(ExpressionValue::Integer(lhs ^ rhs, None)),
                                 BinaryOp::Eq => Ok(ExpressionValue::Bool(lhs == rhs)),
                                 BinaryOp::Ne => Ok(ExpressionValue::Bool(lhs != rhs)),
                                 BinaryOp::Lt => Ok(ExpressionValue::Bool(lhs < rhs)),
@@ -370,75 +370,9 @@ fn bigint_shr(lhs: BigInt, rhs: BigInt) -> Option<BigInt> {
 }
 
 fn bigint_concat(lhs: BigInt, _lhs_width: usize, rhs: BigInt, rhs_width: usize) -> BigInt {
-    bigint_or(lhs << rhs_width, rhs)
-}
-
-fn bigint_not(x: BigInt) -> BigInt {
-    let mut x_bytes = x.to_signed_bytes_le();
-
-    for i in 0..x_bytes.len() {
-        x_bytes[i] = !x_bytes[i];
-    }
-
-    BigInt::from_signed_bytes_le(&x_bytes)
-}
-
-fn bigint_bitmanipulate<F>(lhs: BigInt, rhs: BigInt, f: F) -> BigInt
-where
-    F: Fn(u8, u8) -> u8,
-{
-    let mut lhs_bytes = lhs.to_signed_bytes_le();
-    let mut lhs_sign = lhs.sign();
-    let mut rhs_bytes = rhs.to_signed_bytes_le();
-    let mut rhs_sign = rhs.sign();
-
-    if lhs_sign != Sign::Minus {
-        lhs_bytes.push(0);
-    }
-
-    if rhs_sign != Sign::Minus {
-        rhs_bytes.push(0);
-    }
-
-    if rhs_bytes.len() > lhs_bytes.len() {
-        swap(&mut lhs_bytes, &mut rhs_bytes);
-        swap(&mut lhs_sign, &mut rhs_sign);
-    }
-
-    for i in 0..lhs_bytes.len() {
-        let rhs_byte = if i < rhs_bytes.len() {
-            rhs_bytes[i]
-        } else if rhs_sign == Sign::Minus {
-            0xff
-        } else {
-            0
-        };
-
-        lhs_bytes[i] = f(lhs_bytes[i], rhs_byte);
-    }
-
-    BigInt::from_signed_bytes_le(&lhs_bytes)
-}
-
-fn bigint_and(lhs: BigInt, rhs: BigInt) -> BigInt {
-    bigint_bitmanipulate(lhs, rhs, |a, b| a & b)
-}
-
-fn bigint_or(lhs: BigInt, rhs: BigInt) -> BigInt {
-    bigint_bitmanipulate(lhs, rhs, |a, b| a | b)
-}
-
-fn bigint_xor(lhs: BigInt, rhs: BigInt) -> BigInt {
-    bigint_bitmanipulate(lhs, rhs, |a, b| a ^ b)
+    lhs << rhs_width | rhs
 }
 
 fn bigint_slice(x: BigInt, left: usize, right: usize) -> BigInt {
-    let mut mask = BigInt::zero();
-    for _ in 0..(left - right + 1) {
-        mask = (mask << 1) + BigInt::one();
-    }
-
-    let shifted = bigint_shr(x, BigInt::from(right)).unwrap();
-
-    bigint_and(shifted, mask)
+    (x >> right) & ((BigInt::from(1) << (left - right)) - 1)
 }

@@ -161,7 +161,7 @@ fn drive_inner(
         let mut assembled_debug = assembled.get_debug_output();
 
         let debug_data = assembled_debug
-            .generate_str(4, 4, &assembled_binary, fileserver)
+            .generate_str(4, assembled.cpudef.map_or(1, |it| it.bits), 4, &assembled_binary, fileserver)
             .bytes()
             .collect::<Vec<u8>>();
 

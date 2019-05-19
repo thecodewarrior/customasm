@@ -25,7 +25,7 @@ impl DebugOutput {
         self.items.push(DebugOutputItem { index, width, span, })
     }
 
-    pub fn generate_str(&mut self, digit_bits: usize, grouping: usize, bits: &BinaryOutput, fileserver: &FileServer) -> String {
+    pub fn generate_str(&mut self, digit_bits: usize, word_size: usize, grouping: usize, bits: &BinaryOutput, fileserver: &FileServer) -> String {
         let _flame_guard = flame::start_guard("generate debug string");
         let mut result = String::new();
         let mut files: HashMap<String, CharCounter> = HashMap::new();
@@ -90,7 +90,7 @@ impl DebugOutput {
             display.push((hex, excerpt));
         }
 
-        let address_chars = format!("{:X}", bits.len()).len();
+        let address_chars = format!("{:X}", bits.len() / word_size).len();
         let mut i = 0;
         for i in 0 .. self.items.len() {
             let item = &self.items[i];
@@ -98,7 +98,7 @@ impl DebugOutput {
 
             result = format!(
                 "{0}0x{1:02$X}: {3:<4$}",
-                result, item.index, address_chars,
+                result, item.index / word_size, address_chars,
                 display_strings.0, hex_width
             );
 
