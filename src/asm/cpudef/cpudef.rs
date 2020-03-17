@@ -52,7 +52,7 @@ impl CpuDef {
         let _guard = flame::start_guard(format!("parse {}", filename_owned));
 
         let chars = fileserver.get_chars(report.clone(), &filename_owned, filename_span)?;
-        let tokens = tokenize(report.clone(), filename_owned.as_ref(), &chars)?;
+        let tokens = tokenize(report.clone(), &filename_owned, &chars)?;
 
         let mut new_parser = Parser::new(report.clone(), tokens);
         let mut rules: Vec<Rule> = Vec::new();
